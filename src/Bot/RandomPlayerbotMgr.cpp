@@ -3261,7 +3261,7 @@ void RandomPlayerbotMgr::PrintStats()
     uint32_t step = std::max(1, static_cast<int>((maxBotLevel + 4) / 8));
     uint32_t from = 1;
 
-    for (uint8 i = 1; i <= maxBotLevel; ++i)
+    for (uint32_t i = 1; i <= maxBotLevel; ++i)
     {
         currentAlliance += alliance[i];
         currentHorde += horde[i];
