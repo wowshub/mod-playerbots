@@ -1737,7 +1737,7 @@ void RandomPlayerbotMgr::RandomTeleport(Player* bot, std::vector<WorldLocation>&
         // Prevent blink to be detected by visible real players
         if (botAI->HasPlayerNearby(150.0f))
         {
-            break;
+            continue;
         }
 
         bot->GetMotionMaster()->Clear();
@@ -1757,8 +1757,8 @@ void RandomPlayerbotMgr::RandomTeleport(Player* bot, std::vector<WorldLocation>&
     if (pmo)
         pmo->finish();
 
-    // LOG_ERROR("playerbots", "Cannot teleport bot {} - no locations available ({} locations)", bot->GetName().c_str(),
-    //           tlocs.size());
+    LOG_INFO("playerbots", "Cannot teleport bot {} - no suitable location found ({} candidates tried)", bot->GetName().c_str(),
+              tlocs.size());
 }
 
 void RandomPlayerbotMgr::PrepareZone2LevelBracket()
@@ -2112,7 +2112,7 @@ void RandomPlayerbotMgr::PrepareAddclassCache()
                     Field* fields = results->Fetch();
                     ObjectGuid guid = ObjectGuid(HighGuid::Player, fields[0].Get<uint32>());
                     uint32 race = fields[1].Get<uint32>();
-                    bool isAlliance = race == 1 || race == 3 || race == 4 || race == 7 || race == 11;
+                    bool isAlliance = (1 << (race - 1)) & RACEMASK_ALLIANCE;
                     addclassCache[GetTeamClassIdx(isAlliance, claz)].insert(guid);
                     collected++;
                 } while (results->NextRow());
