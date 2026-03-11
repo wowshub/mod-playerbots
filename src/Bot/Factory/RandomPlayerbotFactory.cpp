@@ -66,6 +66,10 @@ Player* RandomPlayerbotFactory::CreateRandomBot(WorldSession* session, uint8 cls
         if ((1 << (race - 1)) & sWorld->getIntConfig(CONFIG_CHARACTER_CREATING_DISABLED_RACEMASK))
             continue;
 
+        // Skip generating custom race 18 (Naga/Zandalari Troll) for random bots
+        if (race == RACE_FOREST_TROLL)
+            continue;
+
         // Try to get 50/50 faction distribution for random bot population balance.
         // Without this check, races from the faction with more class options would dominate.
         if (alliance == IsAlliance(race))
