@@ -8,6 +8,7 @@
 #include "Playerbots.h"
 #include "ServerFacade.h"
 #include "Vehicle.h"
+#include "Combat/ThreatManager.h"
 
 bool NearestEnemyPlayersValue::AcceptUnit(Unit* unit)
 {
@@ -54,11 +55,14 @@ Unit* EnemyPlayerValue::Calculate()
     // 1. Check units we are currently in combat with.
     std::vector<Unit*> targets;
     Unit* pVictim = bot->GetVictim();
-    HostileReference* pReference = bot->getHostileRefMgr().getFirst();
-    while (pReference)
+    auto const& threatenedByMe = bot->GetThreatMgr().GetThreatenedByMeList();
+    for (auto const& pair : threatenedByMe)
     {
-        ThreatMgr* threatMgr = pReference->GetSource();
-        if (Unit* pTarget = threatMgr->GetOwner())
+        ThreatReference const* ref = pair.second;
+        if (!ref)
+            continue;
+
+        if (Unit* pTarget = ref->GetOwner())
         {
             if (pTarget != pVictim && pTarget->IsPlayer() && pTarget->CanSeeOrDetect(bot) &&
                 bot->IsWithinDist(pTarget, VISIBILITY_DISTANCE_NORMAL))
@@ -77,8 +81,6 @@ Unit* EnemyPlayerValue::Calculate()
                 targets.push_back(pTarget);
             }
         }
-
-        pReference = pReference->next();
     }
 
     if (!targets.empty())

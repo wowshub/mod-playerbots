@@ -15,25 +15,23 @@ class FindTargetForTankStrategy : public FindNonCcTargetStrategy
 public:
     FindTargetForTankStrategy(PlayerbotAI* botAI) : FindNonCcTargetStrategy(botAI), minThreat(0) {}
 
-    void CheckAttacker(Unit* creature, ThreatMgr* threatMgr) override
+    void CheckAttacker(Unit* creature, ThreatManager* threatManager) override
     {
         if (!creature || !creature->IsAlive())
         {
             return;
         }
         Player* bot = botAI->GetBot();
-        float threat = threatMgr->GetThreat(bot);
+        float threat = threatManager->GetThreat(bot);
         if (!result)
         {
             minThreat = threat;
             result = creature;
         }
         // neglect if victim is main tank, or no victim (for untauntable target)
-        if (threatMgr->getCurrentVictim())
+        if (Unit* victim = threatManager->GetCurrentVictim())
         {
-            // float max_threat = threatMgr->GetThreat(threatMgr->getCurrentVictim()->getTarget());
-            Unit* victim = threatMgr->getCurrentVictim()->getTarget();
-            if (victim && victim->ToPlayer() && botAI->IsMainTank(victim->ToPlayer()))
+            if (victim->ToPlayer() && botAI->IsMainTank(victim->ToPlayer()))
             {
                 return;
             }
@@ -54,7 +52,7 @@ class FindTankTargetSmartStrategy : public FindTargetStrategy
 public:
     FindTankTargetSmartStrategy(PlayerbotAI* botAI) : FindTargetStrategy(botAI) {}
 
-    void CheckAttacker(Unit* attacker, ThreatMgr* threatMgr) override
+    void CheckAttacker(Unit* attacker, ThreatManager* threatManager) override
     {
         if (Group* group = botAI->GetBot()->GetGroup())
         {

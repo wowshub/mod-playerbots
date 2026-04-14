@@ -6,7 +6,7 @@
 #include "ThreatValues.h"
 
 #include "Playerbots.h"
-#include "ThreatMgr.h"
+#include "Combat/ThreatManager.h"
 
 uint8 ThreatValue::Calculate()
 {

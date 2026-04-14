@@ -8,7 +8,8 @@
 #include "CellImpl.h"
 #include "PathGenerator.h"
 #include "Playerbots.h"
-#include "MMapFactory.h"
+#include "MMapMgr.h"
+#include "MapCollisionData.h"
 
 bool MoveStuckTrigger::IsActive()
 {
@@ -89,14 +90,11 @@ bool MoveLongStuckTrigger::IsActive()
         return true;
     }
 
-    if (cell.GridX() > 0 && cell.GridY() > 0 &&
-        !MMAP::MMapFactory::createOrGetMMapMgr()->loadMap(botPos.GetMapId(), cell.GridX(), cell.GridY()))
+    if (cell.GridX() > 0 && cell.GridY() > 0)
     {
-        // LOG_INFO("playerbots", "Bot {} {}:{} <{}> was in unloaded grid {},{} on map {}",
-        // bot->GetGUID().ToString().c_str(), bot->GetTeamId() == TEAM_ALLIANCE ? "A" : "H", bot->GetLevel(),
-        // bot->GetName(), grid.x_coord, grid.y_coord, botPos.getMapId());
-
-        return true;
+        if (Map* map = bot->GetMap())
+            if (map->GetMapCollisionData().LoadMMapTile(cell.GridX(), cell.GridY()) != MMAP::MMAP_LOAD_RESULT_OK)
+                return true;
     }
 
     LogCalculatedValue<WorldPosition>* posVal =

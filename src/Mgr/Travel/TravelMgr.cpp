@@ -10,7 +10,8 @@
 
 #include "Talentspec.h"
 #include "ChatHelper.h"
-#include "MMapFactory.h"
+#include "MMapMgr.h"
+#include "MapCollisionData.h"
 #include "MapMgr.h"
 #include "PathGenerator.h"
 #include "Playerbots.h"
@@ -623,15 +624,18 @@ void WorldPosition::loadMapAndVMap(uint32 mapId, uint8 x, uint8 y)
 
     if (isOverworld() && false || false)
     {
-        if (!MMAP::MMapFactory::createOrGetMMapMgr()->loadMap(mapId, x, y))
-            if (sPlayerbotAIConfig.hasLog(fileName))
+        if (Map* map = sMapMgr->FindBaseMap(mapId))
+            if (map->GetMapCollisionData().LoadMMapTile(x, y) != MMAP::MMAP_LOAD_RESULT_OK)
             {
-                std::ostringstream out;
-                out << sPlayerbotAIConfig.GetTimestampStr();
-                out << "+00,\"mmap\", " << x << "," << y << "," << (TravelMgr::instance().isBadMmap(mapId, x, y) ? "0" : "1")
-                    << ",";
-                printWKT(fromGridCoord(GridCoord(x, y)), out, 1, true);
-                sPlayerbotAIConfig.log(fileName, out.str().c_str());
+                if (sPlayerbotAIConfig.hasLog(fileName))
+                {
+                    std::ostringstream out;
+                    out << sPlayerbotAIConfig.GetTimestampStr();
+                    out << "+00,\"mmap\", " << x << "," << y << "," << (TravelMgr::instance().isBadMmap(mapId, x, y) ? "0" : "1")
+                        << ",";
+                    printWKT(fromGridCoord(GridCoord(x, y)), out, 1, true);
+                    sPlayerbotAIConfig.log(fileName, out.str().c_str());
+                }
             }
     }
     else
@@ -643,10 +647,10 @@ void WorldPosition::loadMapAndVMap(uint32 mapId, uint8 x, uint8 y)
             {
                 // load VMAPs for current map/grid...
                 const MapEntry* i_mapEntry = sMapStore.LookupEntry(mapId);
-                //const char* mapName = i_mapEntry ? i_mapEntry->name[sWorld->GetDefaultDbcLocale()] : "UNNAMEDMAP\x0"; //not used, (usage are commented out below), line marked for removal.
 
-                int vmapLoadResult = VMAP::VMapFactory::createOrGetVMapMgr()->loadMap(
-                    (sWorld->GetDataPath() + "vmaps").c_str(), mapId, x, y);
+                int vmapLoadResult = VMAP::VMAP_LOAD_RESULT_ERROR;
+                if (Map* map = sMapMgr->FindBaseMap(mapId))
+                    vmapLoadResult = map->GetMapCollisionData().LoadVMapTile(x, y);
                 switch (vmapLoadResult)
                 {
                     case VMAP::VMAP_LOAD_RESULT_OK:
@@ -679,8 +683,9 @@ void WorldPosition::loadMapAndVMap(uint32 mapId, uint8 x, uint8 y)
         if (!TravelMgr::instance().isBadMmap(mapId, x, y))
         {
             // load navmesh
-            if (!MMAP::MMapFactory::createOrGetMMapMgr()->loadMap(mapId, x, y))
-                TravelMgr::instance().addBadMmap(mapId, x, y);
+            if (Map* map = sMapMgr->FindBaseMap(mapId))
+                if (map->GetMapCollisionData().LoadMMapTile(x, y) != MMAP::MMAP_LOAD_RESULT_OK)
+                    TravelMgr::instance().addBadMmap(mapId, x, y);
 
             if (sPlayerbotAIConfig.hasLog(fileName))
             {
