@@ -1413,19 +1413,10 @@ bool RandomItemMgr::IsValidItem(ItemTemplate const* proto)
     if ((proto->AllowableClass & CLASSMASK_ALL_PLAYABLE) == 0)
         return false;
 
-    constexpr uint32 RACEMASK_ALL_PLAYABLE =
-        (1 << (RACE_HUMAN - 1))         |
-        (1 << (RACE_ORC - 1))           |
-        (1 << (RACE_DWARF - 1))         |
-        (1 << (RACE_NIGHTELF - 1))      |
-        (1 << (RACE_UNDEAD_PLAYER - 1)) |
-        (1 << (RACE_TAUREN - 1))        |
-        (1 << (RACE_GNOME - 1))         |
-        (1 << (RACE_TROLL - 1))         |
-        (1 << (RACE_BLOODELF - 1))      |
-        (1 << (RACE_DRAENEI - 1));
-
     // check race-restricted items
+    // 注：不在这里重新定义 RACEMASK_ALL_PLAYABLE——核心 SharedDefines.h 已经有同名
+    // 宏(而且包含了本服的自定义种族)，重定义会跟宏冲突导致编译报错。直接用核心宏，
+    // 跟上面 CLASSMASK_ALL_PLAYABLE 的用法保持一致。
     if ((proto->AllowableRace & RACEMASK_ALL_PLAYABLE) == 0)
         return false;
 

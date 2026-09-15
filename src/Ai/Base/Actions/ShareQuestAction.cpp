@@ -9,7 +9,6 @@
 #include "Event.h"
 #include "PlayerbotTextMgr.h"
 #include "Playerbots.h"
-#include "QuestPackets.h"
 
 bool ShareQuestAction::Execute(Event event)
 {
@@ -34,9 +33,8 @@ bool ShareQuestAction::Execute(Event event)
         {
             WorldPacket p(CMSG_PUSHQUESTTOPARTY);
             p << entry;
-            WorldPackets::Quest::PushQuestToParty pushQuest(std::move(p));
-            pushQuest.Read();
-            bot->GetSession()->HandlePushQuestToParty(pushQuest);
+            // 旧核心兼容：直接传原始 WorldPacket
+            bot->GetSession()->HandlePushQuestToParty(p);
             botAI->TellMaster(PlayerbotTextMgr::instance().GetBotTextOrDefault(
                 "quest_shared", "Quest shared", {}));
             return true;
@@ -103,9 +101,8 @@ bool AutoShareQuestAction::Execute(Event /*event*/)
 
         WorldPacket p(CMSG_PUSHQUESTTOPARTY);
         p << logQuest;
-        WorldPackets::Quest::PushQuestToParty pushQuest(std::move(p));
-        pushQuest.Read();
-        bot->GetSession()->HandlePushQuestToParty(pushQuest);
+        // 旧核心兼容：直接传原始 WorldPacket
+        bot->GetSession()->HandlePushQuestToParty(p);
         botAI->TellMaster(PlayerbotTextMgr::instance().GetBotTextOrDefault(
             "quest_shared", "Quest shared", {}));
         shared = true;

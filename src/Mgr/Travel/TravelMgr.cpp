@@ -910,7 +910,7 @@ uint32 WorldPosition::getUnitsAggro(GuidVector& units, Player* bot)
 
 void FindPointCreatureData::operator()(CreatureData const& creatureData)
 {
-    if (!entry || creatureData.id == entry)
+    if (!entry || creatureData.id1 == entry)
         if ((!point || creatureData.mapid == point.GetMapId()) &&
             (!radius || point.sqDistance(WorldPosition(creatureData.mapid, creatureData.posX, creatureData.posY,
                                                        creatureData.posZ)) < radius * radius))
@@ -1061,7 +1061,7 @@ bool GuidPosition::IsCreatureOrGOAccessible()
 GuidPosition::GuidPosition(WorldObject* wo) : ObjectGuid(wo->GetGUID()), WorldPosition(wo), loadedFromDB(false) {}
 
 GuidPosition::GuidPosition(CreatureData const& creData)
-    : ObjectGuid(HighGuid::Unit, creData.id, creData.spawnId),
+    : ObjectGuid(HighGuid::Unit, creData.id1, creData.spawnId),
       WorldPosition(creData.mapid, creData.posX, creData.posY, creData.posZ, creData.orientation)
 {
     loadedFromDB = true;
@@ -1886,14 +1886,14 @@ void TravelMgr::LoadQuestTravelTable()
     for (auto& creatureData : WorldPosition().getCreaturesNear())
     {
         t_unit.type = 0;
-        t_unit.entry = creatureData->id;
+        t_unit.entry = creatureData->id1;
         t_unit.map = creatureData->mapid;
         t_unit.x = creatureData->posX;
         t_unit.y = creatureData->posY;
         t_unit.z = creatureData->posZ;
         t_unit.o = creatureData->orientation;
 
-        entryCount[creatureData->id]++;
+        entryCount[creatureData->id1]++;
 
         units.push_back(t_unit);
     }
@@ -2919,7 +2919,7 @@ void TravelMgr::LoadQuestTravelTable()
     {
         for (CreatureData const* cData : WorldPosition().getCreaturesNear())
         {
-            CreatureTemplate const* cInfo = sObjectMgr->GetCreatureTemplate(cData->id);
+            CreatureTemplate const* cInfo = sObjectMgr->GetCreatureTemplate(cData->id1);
             if (!cInfo)
                 continue;
 
@@ -4649,7 +4649,7 @@ void TravelMgr::PrepareDestinationCache()
     std::map<uint32, std::map<uint32, std::vector<WorldLocation>>> tempCreatureCache;
     for (auto const& [guid, creatureData] : sObjectMgr->GetAllCreatureData())
     {
-        CreatureTemplate const* creatureTemplate = sObjectMgr->GetCreatureTemplate(creatureData.id);
+        CreatureTemplate const* creatureTemplate = sObjectMgr->GetCreatureTemplate(creatureData.id1);
         if (!creatureTemplate)
             continue;
 
@@ -4662,7 +4662,7 @@ void TravelMgr::PrepareDestinationCache()
         float y = creatureData.posY;
         float z = creatureData.posZ;
         float orient = creatureData.orientation;
-        uint32 templateEntry = creatureData.id;
+        uint32 templateEntry = creatureData.id1;
 
         Map* map = sMapMgr->FindMap(mapId, 0);
         if (!map)
@@ -4814,7 +4814,7 @@ void TravelMgr::PrepareDestinationCache()
     {
         if (creatureDataList.size() >= 2)
         {
-            CreatureTemplate const* creatureTemplate = sObjectMgr->GetCreatureTemplate(creatureDataList[0].id);
+            CreatureTemplate const* creatureTemplate = sObjectMgr->GetCreatureTemplate(creatureDataList[0].id1);
             uint32 level = (creatureTemplate->minlevel + creatureTemplate->maxlevel + 1) / 2;
             for (int32 l = (int32)level - (int32)sPlayerbotAIConfig.randomBotTeleLowerLevel;
                  l <= (int32)level + (int32)sPlayerbotAIConfig.randomBotTeleHigherLevel; l++)

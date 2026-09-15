@@ -59,7 +59,7 @@ std::string const CDPairCalculatedValue::Format()
     CreatureData const* creatureData = Calculate();
     if (creatureData)
     {
-        CreatureTemplate const* bmTemplate = sObjectMgr->GetCreatureTemplate(creatureData->id);
+        CreatureTemplate const* bmTemplate = sObjectMgr->GetCreatureTemplate(creatureData->id1);
         return bmTemplate ? bmTemplate->Name : "<none>";
     }
 
@@ -79,7 +79,7 @@ std::string const CDPairListCalculatedValue::Format()
     std::vector<CreatureData const*> cdPairs = Calculate();
     for (CreatureData const* cdPair : cdPairs)
     {
-        out << cdPair->id << ",";
+        out << cdPair->id1 << ",";
     }
 
     out << "}";

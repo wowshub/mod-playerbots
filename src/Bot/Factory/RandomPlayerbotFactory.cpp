@@ -88,15 +88,9 @@ Player* RandomPlayerbotFactory::CreateRandomBot(WorldSession* session, uint8 cls
     const auto raceAndGender = CombineRaceAndGender(race, gender);
 
     std::string name;
-    if (!nameCache.empty())
+    // BOT1: one exhausted category must fall back just like an empty cache.
+    if (!nameCache[raceAndGender].empty())
     {
-        if (nameCache[raceAndGender].empty())
-        {
-            LOG_ERROR("playerbots", "No names found for the specified race: {} and gender: {}",
-                    race, gender);
-            return nullptr;
-        }
-
         uint32 i = urand(0, nameCache[raceAndGender].size() - 1);
         name = nameCache[raceAndGender][i];
         swap(nameCache[raceAndGender][i], nameCache[raceAndGender].back());
@@ -137,13 +131,33 @@ Player* RandomPlayerbotFactory::CreateRandomBot(WorldSession* session, uint8 cls
         }
     }
 
-    //uint8 skinColor = skinColors[urand(0, skinColors.size() - 1)]; //not used, line marked for removal.
-    std::pair<uint8, uint8> face = faces[urand(0, faces.size() - 1)];
-    std::pair<uint8, uint8> hair = hairs[urand(0, hairs.size() - 1)];
+    // Custom races can legally omit one or more CharSections groups.  Never
+    // generate a random index from an empty vector: urand(0, size - 1) wraps
+    // the upper bound and the following operator[] becomes an access violation.
+    // Zero is a safe fallback here; Player::Create performs the authoritative
+    // appearance validation and already returns false without crashing.
+    std::pair<uint8, uint8> face = { 0, 0 };
+    if (!faces.empty())
+        face = faces[urand(0, faces.size() - 1)];
+    else
+        LOG_WARN("playerbots", "No face CharSections found for random bot race: {}, gender: {}; using 0/0 fallback",
+                race, gender);
+
+    std::pair<uint8, uint8> hair = { 0, 0 };
+    if (!hairs.empty())
+        hair = hairs[urand(0, hairs.size() - 1)];
+    else
+        LOG_WARN("playerbots", "No hair CharSections found for random bot race: {}, gender: {}; using 0/0 fallback",
+                race, gender);
 
     bool excludeCheck = (race == RACE_TAUREN) || (race == RACE_DRAENEI) ||
                         (gender == GENDER_FEMALE && race != RACE_NIGHTELF && race != RACE_UNDEAD_PLAYER);
-    uint8 facialHair = excludeCheck ? 0 : facialHairTypes[urand(0, facialHairTypes.size() - 1)];
+    uint8 facialHair = 0;
+    if (!excludeCheck && !facialHairTypes.empty())
+        facialHair = facialHairTypes[urand(0, facialHairTypes.size() - 1)];
+    else if (!excludeCheck)
+        LOG_WARN("playerbots", "No facial-hair CharSections found for random bot race: {}, gender: {}; using 0 fallback",
+                race, gender);
 
     std::unique_ptr<CharacterCreateInfo> characterInfo = std::make_unique<CharacterCreateInfo>(
         name, race, cls, gender, face.second, face.first, hair.first, hair.second, facialHair);
@@ -207,7 +221,7 @@ std::string const RandomPlayerbotFactory::CreateRandomBotName(NameRaceAndGender 
     }
 
     // CONLANG NAME GENERATION
-    LOG_ERROR("playerbots", "No more names left for random bots. Attempting conlang name generation.");
+    LOG_DEBUG("playerbots", "Preset names unavailable; attempting conlang name generation.");
     const std::string groupCategory = "SCVKRU";
     const std::string groupFormStart[2][4] = {{"SV", "SV", "VK", "RV"}, {"V", "SU", "VS", "RV"}};
     const std::string groupFormMid[2][6] = {{"CV", "CVC", "CVC", "CVK", "VC", "VK"},
@@ -674,10 +688,9 @@ void RandomPlayerbotFactory::CreateRandomBots()
             QueryResult result = CharacterDatabase.Query("SELECT name, gender FROM playerbots_names");
             if (!result)
             {
-                LOG_ERROR("playerbots", "No more unused names left");
-                return;
+                LOG_WARN("playerbots", "Preset bot names unavailable; using the name generator.");
             }
-            do
+            if (result) do
             {
                 Field* fields = result->Fetch();
                 std::string name = fields[0].Get<std::string>();
@@ -703,8 +716,13 @@ void RandomPlayerbotFactory::CreateRandomBots()
                                                 time_t(0), LOCALE_enUS, 0, false, false, 0, true);
         sessionBots.push_back(session);
 
-        for (uint8 cls = CLASS_WARRIOR; cls < MAX_CLASSES - count; ++cls)
+        // BOT1: class ID capacity is not the per-account character limit.
+        for (uint8 cls = CLASS_WARRIOR; cls < MAX_CLASSES && count < 10; ++cls)
         {
+            // Custom Monk currently has player-only learning and no bot AI adapter.
+            if (cls == CLASS_MONK)
+                continue;
+
             // skip nonexistent classes
             if (!((1 << (cls - 1)) & CLASSMASK_ALL_PLAYABLE) || !sChrClassesStore.LookupEntry(cls))
                 continue;
@@ -726,6 +744,7 @@ void RandomPlayerbotFactory::CreateRandomBots()
                                                     playerBot->getClass(), playerBot->GetLevel());
             playerBot->CleanupsBeforeDelete();
             delete playerBot;
+            ++count;
             bot_creation++;
         }
     }
@@ -897,32 +916,31 @@ void RandomPlayerbotFactory::CreateRandomArenaTeams(ArenaType type, uint32 count
 
 std::string const RandomPlayerbotFactory::CreateRandomArenaTeamName()
 {
-    std::string arenaTeamName = "";
-
-    QueryResult result = CharacterDatabase.Query("SELECT MAX(name_id) FROM playerbots_arena_team_names");
-    if (!result)
+    // BOT2: search the entire unused pool, not just the tail after a random ID.
+    QueryResult result = CharacterDatabase.Query(
+        "SELECT n.name FROM playerbots_arena_team_names n "
+        "LEFT JOIN arena_team e ON e.name = n.name "
+        "WHERE e.arenateamid IS NULL ORDER BY RAND() LIMIT 1");
+    if (result)
     {
-        LOG_ERROR("playerbots", "No more names left for random arena teams");
-        return arenaTeamName;
+        std::string name = result->Fetch()[0].Get<std::string>();
+        if (!name.empty() && !sArenaTeamMgr->GetArenaTeamByName(name))
+            return name;
     }
 
-    Field* fields = result->Fetch();
-    uint32 maxId = fields[0].Get<uint32>();
-
-    uint32 id = urand(0, maxId);
-    result = CharacterDatabase.Query(
-        "SELECT n.name FROM playerbots_arena_team_names n LEFT OUTER JOIN arena_team e ON e.name = n.name "
-        "WHERE e.arenateamid IS NULL AND n.name_id >= {} LIMIT 1",
-        id);
-
-    if (!result)
+    // Exhausting preset names is normal; bounded retries avoid an endless loop.
+    for (uint32 attempt = 0; attempt < 64; ++attempt)
     {
-        LOG_ERROR("playerbots", "No more names left for random arena teams");
-        return arenaTeamName;
+        std::string name = "Arena ";
+        for (uint32 i = 0; i < 12; ++i)
+            name += static_cast<char>('a' + urand(0, 25));
+        if (sArenaTeamMgr->GetArenaTeamByName(name))
+            continue;
+        QueryResult existing = CharacterDatabase.Query(
+            "SELECT arenateamid FROM arena_team WHERE name = '{}' LIMIT 1", name);
+        if (!existing)
+            return name;
     }
-
-    fields = result->Fetch();
-    arenaTeamName = fields[0].Get<std::string>();
-
-    return arenaTeamName;
+    LOG_ERROR("playerbots", "Failed to generate an unused random arena team name after 64 attempts");
+    return "";
 }
