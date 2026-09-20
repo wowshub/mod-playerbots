@@ -720,7 +720,7 @@ void RandomPlayerbotFactory::CreateRandomBots()
         for (uint8 cls = CLASS_WARRIOR; cls < MAX_CLASSES && count < 10; ++cls)
         {
             // Custom Monk currently has player-only learning and no bot AI adapter.
-            if (cls == CLASS_MONK)
+            if (cls == CLASS_MONK || cls == CLASS_WITCH_DOCTOR)
                 continue;
 
             // skip nonexistent classes
