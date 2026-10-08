@@ -397,10 +397,92 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
 
     // Update the bot's group status (moved to helper function)
     UpdateAIGroupMaster();
+    if (UpdateDracthyrDragonForm())
+    {
+        YieldThread(bot, GetReactDelay());
+        return;
+    }
 
     // Update internal AI
     UpdateAIInternal(elapsed, minimal);
     YieldThread(bot, GetReactDelay());
+}
+
+// DRBOT1A: use the existing TwoForms spell lifecycle; never assign a model here.
+bool PlayerbotAI::UpdateDracthyrDragonForm()
+{
+    constexpr uint32 dragonSpell = 320555;
+    if (bot->getRace() != 27 || !bot->GetSession()->IsBot() || IsRealPlayer())
+        return false;
+
+    if (!bot->IsAlive())
+    {
+        dracthyrAutoForm = false;
+        dracthyrFormSuppressed = false;
+        dracthyrIdleSince = 0;
+        dracthyrNextFormAttempt = 0;
+        return false;
+    }
+
+    time_t const now = time(nullptr);
+    bool const grouped = bot->GetGroup() && HasRealPlayerMaster() && IsValidPlayer(master) &&
+                         master->GetGroup() == bot->GetGroup();
+    bool const fighting = bot->IsInCombat() ||
+        (grouped && master->GetMap() == bot->GetMap() &&
+         bot->IsWithinDistInMap(master, 60.0f) && master->IsInCombat());
+    if (fighting)
+        dracthyrIdleSince = 0;
+    else
+    {
+        if (!dracthyrIdleSince)
+            dracthyrIdleSince = now;
+        // Re-arm only after a stable break, not a single combat-state flicker.
+        if (now - dracthyrIdleSince >= 10)
+            dracthyrFormSuppressed = false;
+    }
+
+    // Three seconds includes TwoForms' 1500 ms aura synchronization grace.
+    if (now < dracthyrNextFormAttempt)
+        return false;
+    if (dracthyrAutoForm && !bot->HasAura(dragonSpell))
+    {
+        dracthyrAutoForm = false;
+        dracthyrFormSuppressed = true;
+        return false;
+    }
+
+    ShapeshiftForm const form = bot->GetShapeshiftForm();
+    bool const otherForm = form != FORM_NONE && form != FORM_BATTLESTANCE &&
+                          form != FORM_DEFENSIVESTANCE && form != FORM_BERSERKERSTANCE;
+    if (bot->IsMounted() || bot->IsFlying() || bot->HasUnitState(UNIT_STATE_IN_FLIGHT | UNIT_STATE_CONTROLLED) ||
+        bot->GetVehicle() || bot->IsCharmed() || bot->HasAura(34873) || bot->HasAura(47241) ||
+        otherForm || bot->HasAuraType(SPELL_AURA_TRANSFORM) || bot->HasAuraType(SPELL_AURA_MOD_STEALTH) ||
+        bot->IsNonMeleeSpellCast(true))
+        return false;
+
+    if (!fighting)
+    {
+        if (dracthyrAutoForm && now - dracthyrIdleSince >= 10)
+        {
+            // Only remove a form this AI acquired. TwoForms restores appearance/equipment.
+            bot->RemoveAurasDueToSpell(dragonSpell);
+            dracthyrAutoForm = false;
+        }
+        return false;
+    }
+
+    uint32 const display = bot->GetDisplayId();
+    bool const dragonDisplay = (display >= 1100000 && display < 1100120) ||
+                               (display >= 1101000 && display < 1101120);
+    if (!grouped || dracthyrFormSuppressed || bot->HasAura(dragonSpell) || dragonDisplay ||
+        !bot->HasSpell(dragonSpell) || !bot->IsStandState())
+        return false;
+
+    dracthyrNextFormAttempt = now + 3;
+    if (!CanCastSpell(dragonSpell, bot) || !CastSpell(dragonSpell, bot))
+        return false;
+    dracthyrAutoForm = true;
+    return true; // Do not launch a second AI action in this update.
 }
 
 // Helper function for UpdateAI to check group membership and handle removal if necessary

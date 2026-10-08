@@ -616,6 +616,11 @@ private:
                                    bool mixed = false);
     bool IsTellAllowed(PlayerbotSecurityLevel securityLevel = PLAYERBOT_SECURITY_ALLOW_ALL);
     void UpdateAIGroupMaster();
+    bool UpdateDracthyrDragonForm();
+    bool dracthyrAutoForm = false;
+    bool dracthyrFormSuppressed = false;
+    time_t dracthyrIdleSince = 0;
+    time_t dracthyrNextFormAttempt = 0;
     Item* FindItemInInventory(std::function<bool(ItemTemplate const*)> checkItem) const;
     void HandleCommands();
     void HandleCommand(uint32 type, const std::string& text, Player& fromPlayer, const uint32 lang = LANG_UNIVERSAL);
