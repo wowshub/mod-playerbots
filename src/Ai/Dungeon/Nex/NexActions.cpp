@@ -1,5 +1,6 @@
 #include "Playerbots.h"
 #include "NexActions.h"
+#include "CreatureNameAlias.h"
 
 bool MoveFromWhirlwindAction::Execute(Event /*event*/)
 {
@@ -121,7 +122,7 @@ bool ChaoticRiftTargetAction::Execute(Event /*event*/)
     for (auto i = targets.begin(); i != targets.end(); ++i)
     {
         Unit* unit = botAI->GetUnit(*i);
-        if (unit && unit->GetName() == "Chaotic Rift")
+        if (unit && (unit->GetName() == "Chaotic Rift" || CreatureNameAlias::IsEntryNamed(unit->GetEntry(), "chaotic rift")))
         {
             chaoticRift = unit;
             break;

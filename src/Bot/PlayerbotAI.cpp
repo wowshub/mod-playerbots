@@ -4,6 +4,7 @@
  */
 
 #include "PlayerbotAI.h"
+#include "CreatureNameAlias.h"
 
 #include <cmath>
 #include <mutex>
@@ -6143,18 +6144,20 @@ void PlayerbotAI::QueueChatResponse(const ChatQueuedReply chatReply) { chatRepli
 
 bool PlayerbotAI::EqualLowercaseName(std::string s1, std::string s2)
 {
-    if (s1.length() != s2.length())
-    {
-        return false;
-    }
-    for (std::string::size_type i = 0; i < s1.length(); i++)
+    bool equal = s1.length() == s2.length();
+    for (std::string::size_type i = 0; equal && i < s1.length(); i++)
     {
         if (tolower(s1[i]) != tolower(s2[i]))
         {
-            return false;
+            equal = false;
         }
     }
-    return true;
+    if (equal)
+        return true;
+
+    // Tactics compare a creature's name with its English name; on a realm with translated creature
+    // names, accept this realm's name of that creature too (either argument order).
+    return CreatureNameAlias::IsLocalNameOf(s1, s2) || CreatureNameAlias::IsLocalNameOf(s2, s1);
 }
 
 // A custom CanEquipItem (remove AutoUnequipOffhand in FindEquipSlot to prevent unequip on `item usage` calculation)

@@ -6,7 +6,10 @@
 
 #include "TargetValue.h"
 
+#include <algorithm>
+
 #include "CombatManager.h"
+#include "CreatureNameAlias.h"
 #include "LastMovementValue.h"
 #include "ObjectGuid.h"
 #include "Playerbots.h"
@@ -168,11 +171,17 @@ Unit* FindTargetValue::Calculate()
     {
         return nullptr;
     }
+    // Tactics pass English names; a realm with translated creature names only matches by entry.
+    std::vector<uint32> const* aliasEntries = CreatureNameAlias::Entries(qualifier);
     for (auto const& [guid, ref] : bot->GetThreatMgr().GetThreatenedByMeList())
     {
         Unit* unit = ref->GetOwner();
         if (!unit)
             continue;
+
+        if (aliasEntries && unit->IsCreature() &&
+            std::find(aliasEntries->begin(), aliasEntries->end(), unit->GetEntry()) != aliasEntries->end())
+            return unit;
 
         std::wstring wnamepart;
         Utf8toWStr(unit->GetName(), wnamepart);
