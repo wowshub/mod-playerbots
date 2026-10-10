@@ -1565,7 +1565,11 @@ bool MovementAction::MoveAway(Unit* target, float distance, bool backwards)
             dz = bot->GetPositionZ();
             exact = false;
         }
-        if (MoveTo(target->GetMapId(), dx, dy, dz, false, false, true, exact, MovementPriority::MOVEMENT_COMBAT, false,
+        // RebornWOW DCAI1C: never step off a ledge. Past an edge the "valid" coords are the
+        // floor below -- the tank spread off Krystallus' platform in Halls of Stone (22 yd
+        // drop), then stranded-recovery pulled the whole party down after it.
+        if (!(exact && std::fabs(dz - bot->GetPositionZ()) > 4.0f) &&
+            MoveTo(target->GetMapId(), dx, dy, dz, false, false, true, exact, MovementPriority::MOVEMENT_COMBAT, false,
                    backwards))
         {
             return true;
@@ -1588,7 +1592,11 @@ bool MovementAction::MoveAway(Unit* target, float distance, bool backwards)
             dz = bot->GetPositionZ();
             exact = false;
         }
-        if (MoveTo(target->GetMapId(), dx, dy, dz, false, false, true, exact, MovementPriority::MOVEMENT_COMBAT, false,
+        // RebornWOW DCAI1C: never step off a ledge. Past an edge the "valid" coords are the
+        // floor below -- the tank spread off Krystallus' platform in Halls of Stone (22 yd
+        // drop), then stranded-recovery pulled the whole party down after it.
+        if (!(exact && std::fabs(dz - bot->GetPositionZ()) > 4.0f) &&
+            MoveTo(target->GetMapId(), dx, dy, dz, false, false, true, exact, MovementPriority::MOVEMENT_COMBAT, false,
                    backwards))
         {
             return true;
@@ -1924,10 +1932,10 @@ bool AvoidAoeAction::AvoidAuraWithDynamicObj()
     name << spellInfo->SpellName[LOCALE_enUS];  // << "] (aura)";
     if (FleePosition(dynOwner->GetPosition(), radius))
     {
+        lastMoveTimer = getMSTime();  // RebornWOW DCAI1B: hold the dodge, telling or not
         if (sPlayerbotAIConfig.tellWhenAvoidAoe && lastTellTimer < time(NULL) - 10)
         {
             lastTellTimer = time(NULL);
-            lastMoveTimer = getMSTime();
             std::ostringstream out;
             out << "I'm avoiding " << name.str() << " (" << spellInfo->Id << ")" << " Radius " << radius << " - [Aura]";
             bot->Say(out.str(), LANG_UNIVERSAL);
@@ -1992,10 +2000,10 @@ bool AvoidAoeAction::AvoidGameObjectWithDamage()
         name << spellInfo->SpellName[LOCALE_enUS];  // << "] (object)";
         if (FleePosition(go->GetPosition(), radius))
         {
+            lastMoveTimer = getMSTime();  // RebornWOW DCAI1B: hold the dodge, telling or not
             if (sPlayerbotAIConfig.tellWhenAvoidAoe && lastTellTimer < time(NULL) - 10)
             {
                 lastTellTimer = time(NULL);
-                lastMoveTimer = getMSTime();
                 std::ostringstream out;
                 out << "I'm avoiding " << name.str() << " (" << spellInfo->Id << ")" << " Radius " << radius
                     << " - [Trap]";
@@ -2023,7 +2031,7 @@ bool AvoidAoeAction::AvoidUnitWithDamageAura()
         }
         if (!unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE))
         {
-            return false;
+            continue;  // RebornWOW DCAI1B: skip this one, keep scanning the others
         }
         Unit::AuraEffectList const& aurasPeriodicTriggerSpell =
             unit->GetAuraEffectsByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
@@ -2043,7 +2051,7 @@ bool AvoidAoeAction::AvoidUnitWithDamageAura()
                     continue;
                 if (sPlayerbotAIConfig.aoeAvoidSpellWhitelist.find(triggerSpellInfo->Id) !=
                     sPlayerbotAIConfig.aoeAvoidSpellWhitelist.end())
-                    return false;
+                    continue;  // RebornWOW DCAI1B: whitelisted spell, check the next aura
                 for (int j = 0; j < MAX_SPELL_EFFECTS; j++)
                 {
                     if (triggerSpellInfo->Effects[j].Effect == SPELL_EFFECT_SCHOOL_DAMAGE)
@@ -2059,15 +2067,18 @@ bool AvoidAoeAction::AvoidUnitWithDamageAura()
                         name << triggerSpellInfo->SpellName[LOCALE_enUS];  //<< "] (unit)";
                         if (FleePosition(unit->GetPosition(), radius))
                         {
+                            lastMoveTimer = getMSTime();  // RebornWOW DCAI1B: hold the dodge
                             if (sPlayerbotAIConfig.tellWhenAvoidAoe && lastTellTimer < time(NULL) - 10)
                             {
                                 lastTellTimer = time(NULL);
-                                lastMoveTimer = getMSTime();
                                 std::ostringstream out;
                                 out << "I'm avoiding " << name.str() << " (" << triggerSpellInfo->Id << ")"
                                     << " Radius " << radius << " - [Unit Trigger]";
                                 bot->Say(out.str(), LANG_UNIVERSAL);
                             }
+                            // RebornWOW DCAI1B: the move happened -- report success (this path
+                            // used to fall through to "return false" and log every dodge FAILED).
+                            return true;
                         }
                     }
                 }
@@ -2120,6 +2131,11 @@ Position MovementAction::BestPositionForMeleeToFlee(Position pos, float radius)
         float dz = bot->GetPositionZ();
         if (!bot->GetMap()->CheckCollisionAndGetValidCoords(bot, bot->GetPositionX(), bot->GetPositionY(),
                                                             bot->GetPositionZ(), dx, dy, dz))
+        {
+            continue;
+        }
+        // RebornWOW DCAI1C: a flee spot past a ledge resolves to the floor below -- skip it.
+        if (std::fabs(dz - bot->GetPositionZ()) > 4.0f)
         {
             continue;
         }
@@ -2183,6 +2199,11 @@ Position MovementAction::BestPositionForRangedToFlee(Position pos, float radius)
         float dz = bot->GetPositionZ();
         if (!bot->GetMap()->CheckCollisionAndGetValidCoords(bot, bot->GetPositionX(), bot->GetPositionY(),
                                                             bot->GetPositionZ(), dx, dy, dz))
+        {
+            continue;
+        }
+        // RebornWOW DCAI1C: a flee spot past a ledge resolves to the floor below -- skip it.
+        if (std::fabs(dz - bot->GetPositionZ()) > 4.0f)
         {
             continue;
         }

@@ -13,6 +13,12 @@ bool KrystallusGroundSlamTrigger::IsActive()
     return bot->HasAura(SPELL_GROUND_SLAM) || bot->HasAura(DEBUFF_GROUND_SLAM);
 }
 
+bool TribunalDarkMatterTrigger::IsActive()
+{
+    Creature* target = bot->FindNearestCreature(NPC_DARK_MATTER_TARGET, 12.0f);
+    return target && target->HasAura(SPELL_DARK_MATTER_VISUAL);
+}
+
 bool SjonnirLightningRingTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "sjonnir the ironshaper");

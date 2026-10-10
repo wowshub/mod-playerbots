@@ -34,6 +34,21 @@ bool ShatterSpreadAction::Execute(Event /*event*/)
     return false;
 }
 
+bool AvoidDarkMatterAction::Execute(Event /*event*/)
+{
+    Creature* target = bot->FindNearestCreature(NPC_DARK_MATTER_TARGET, 12.0f);
+    if (!target || !target->HasAura(SPELL_DARK_MATTER_VISUAL))
+        return false;
+
+    // 5 yd blast, plus room for the target still gliding toward its chosen spot.
+    float const safe = 10.0f;
+    float const distance = bot->GetExactDist2d(target);
+    if (distance >= safe)
+        return false;
+
+    return MoveAway(target, safe - distance + 1.0f);
+}
+
 bool AvoidLightningRingAction::Execute(Event /*event*/)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "sjonnir the ironshaper");

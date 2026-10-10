@@ -12,6 +12,10 @@ void WotlkDungeonHoSStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
         { NextAction("shatter spread", ACTION_RAID + 5) }));
 
     // Tribunal of Ages
+    // RebornWOW DCAI1B: step away from a glowing Dark Matter target before it blows (5 yd).
+    // Searing Gaze (a damage-aura trigger) is left to the generic "avoid aoe".
+    triggers.push_back(new TriggerNode("dark matter",
+        { NextAction("avoid dark matter", ACTION_RAID + 5) }));
     // Seems fine, maybe add focus targeting strat if needed on heroic.
     // Main issue is dps will immediately rambo in and sometimes die before tank gets aggro,
     // this is mostly an issue with the bot AI as they do it on every fight

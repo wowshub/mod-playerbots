@@ -14,6 +14,13 @@ public:
     bool Execute(Event event) override;
 };
 
+class AvoidDarkMatterAction : public MovementAction
+{
+public:
+    AvoidDarkMatterAction(PlayerbotAI* ai) : MovementAction(ai, "avoid dark matter") {}
+    bool Execute(Event event) override;
+};
+
 class AvoidLightningRingAction : public MovementAction
 {
 public:
