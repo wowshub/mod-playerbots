@@ -81,6 +81,9 @@ private:
                                                   bool normal_only = false, float step = 8.0f);
     bool wasMovementRestricted = false;
     void DoMovePoint(Unit* unit, float x, float y, float z, bool generatePath, bool backwards);
+    // RebornWOW PBMOVE1A: refuse point moves the core would run as a straight line across floors
+    bool IsSafePointMove(Unit* unit, float x, float y, float z);
+    uint32 lastUnsafeMoveLogMs = 0;
 };
 
 class FleeAction : public MovementAction

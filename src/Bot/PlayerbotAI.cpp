@@ -47,6 +47,11 @@
 #include "PositionValue.h"
 #include "RBAC.h"
 #include "RandomPlayerbotMgr.h"
+#include "BattleGroundJoinAction.h"
+#include "Group.h"
+#include "ObjectAccessor.h"
+#include "PlayerbotOperation.h"
+#include "PlayerbotWorldThreadProcessor.h"
 #include "SayAction.h"
 #include "ScriptMgr.h"
 #include "ServerFacade.h"
@@ -548,6 +553,142 @@ void PlayerbotAI::UpdateAIGroupMaster()
     }
 }
 
+// RebornWOW PBBG1A/1B. A player's own bots (alts, added bots) went into a battleground
+// with their owner but stayed there when the owner left: dead in Arathi Basin, shown
+// OFFLINE in the original party, out of reach of any summon. The core only removes
+// them when the battleground ends. Now the bot leaves once the owner has been out of
+// this battleground for 5 s, through the same path as a player clicking Leave
+// Battleground (BGStatusAction::LeaveBG -> HandleBattlefieldLeaveOpcode): the core
+// removes it from the BG raid, resurrects it if dead (RemovePlayerAtLeave "resurrect
+// on exit"), sends it to its entry point and restores the original party.
+// PBBG1B: 1A keyed on `master`, and an in-game test never fired. 1B decides from the
+// bot's ORIGINAL party (kept by the core while in the BG raid): if it has a real
+// player and no real player of it is in this battleground, the owner has left; the
+// master pointer is only the fallback when there is no original party. The core
+// refuses to leave a running battleground in combat and battleground bots are almost
+// always fighting, so after 15 s the bot's combat is stopped and it leaves anyway.
+// A PBBG1B line every 30 s per bot in a battleground shows the inputs. Random bots
+// are never touched.
+// PBBG1C: 1B called LeaveBG right here, on the battleground map's thread, and the
+// server died while the hunter (with its pet) was leaving. The core runs
+// CMSG_LEAVE_BATTLEFIELD as PROCESS_THREADUNSAFE, i.e. on the world thread: leaving
+// removes the bot (and pet) from the map and rewires the BG raid / original party.
+// The decision below only reads state and stays on the bot's tick; the leave itself
+// (and the combat stop) is queued once as a PlayerbotWorldThreadProcessor operation,
+// which runs on the world thread while no map is updating.
+namespace
+{
+class BattlegroundLeaveOperation : public PlayerbotOperation
+{
+public:
+    explicit BattlegroundLeaveOperation(ObjectGuid botGuid) : m_botGuid(botGuid) {}
+
+    bool Execute() override
+    {
+        Player* bot = ObjectAccessor::FindPlayer(m_botGuid);
+        if (!bot || !bot->IsInWorld() || !bot->InBattleground())
+            return false;
+        PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
+        if (!botAI)
+            return false;
+        if (bot->IsInCombat())
+        {
+            bot->AttackStop();
+            bot->CombatStop(true);
+        }
+        LOG_INFO("playerbots", "PBBG1C: {} leaves battleground {} (world thread)", bot->GetName(),
+                 bot->GetBattlegroundId());
+        return BGStatusAction::LeaveBG(botAI);
+    }
+
+    ObjectGuid GetBotGuid() const override { return m_botGuid; }
+    uint32 GetPriority() const override { return 50; }
+    std::string GetName() const override { return "BattlegroundLeave"; }
+    bool IsValid() const override { return !m_botGuid.IsEmpty(); }
+
+private:
+    ObjectGuid m_botGuid;
+};
+}
+
+void PlayerbotAI::FollowMasterOutOfBattleground()
+{
+    if (!bot->InBattleground())
+    {
+        masterLeftBgSinceMs = 0;
+        bgLeaveQueued = false;
+        return;
+    }
+    if (bgLeaveQueued)
+    {
+        if (getMSTimeDiff(bgLeaveQueuedMs, getMSTime()) < 10000)
+            return;  // the world thread will take it out
+        bgLeaveQueued = false;  // the operation did not take: decide again
+    }
+    if (sRandomPlayerbotMgr.IsRandomBot(bot) || IsRealPlayer())
+        return;
+
+    uint32 const bgId = bot->GetBattlegroundId();
+    uint32 realInParty = 0, realHere = 0;
+    Group* original = bot->GetOriginalGroup();
+    if (original)
+    {
+        for (Group::MemberSlot const& slot : original->GetMemberSlots())
+        {
+            Player* member = ObjectAccessor::FindConnectedPlayer(slot.guid);
+            if (!member || member == bot)
+                continue;
+            PlayerbotAI* memberAI = GET_PLAYERBOT_AI(member);
+            if (memberAI && !memberAI->IsRealPlayer())
+                continue;  // another bot
+            ++realInParty;
+            if (member->InBattleground() && member->GetBattlegroundId() == bgId)
+                ++realHere;
+        }
+    }
+
+    bool ownerGone;
+    if (realInParty)
+        ownerGone = realHere == 0;
+    else
+        ownerGone = master && master != bot && !(master->InBattleground() && master->GetBattlegroundId() == bgId);
+
+    uint32 const now = getMSTime();
+    if (!bgLeaveDiagMs || getMSTimeDiff(bgLeaveDiagMs, now) >= 30000)
+    {
+        bgLeaveDiagMs = now ? now : 1;
+        LOG_INFO("playerbots",
+                 "PBBG1B: {} in bg {} master={} masterBg={} originalGroup={} realInParty={} realHere={} ownerGone={} combat={} dead={}",
+                 bot->GetName(), bgId, master ? master->GetName() : std::string("none"),
+                 master ? master->GetBattlegroundId() : 0, original ? original->GetGUID().GetCounter() : 0,
+                 realInParty, realHere, ownerGone ? 1 : 0, bot->IsInCombat() ? 1 : 0, bot->isDead() ? 1 : 0);
+    }
+
+    if (!ownerGone)
+    {
+        masterLeftBgSinceMs = 0;
+        return;
+    }
+    if (!masterLeftBgSinceMs)
+    {
+        masterLeftBgSinceMs = now ? now : 1;
+        return;
+    }
+    uint32 const waited = getMSTimeDiff(masterLeftBgSinceMs, now);
+    if (waited < 5000)
+        return;
+    if (bot->IsInCombat() && waited < 15000)
+        return;  // give it a chance to drop combat; after 15 s the operation stops it
+
+    masterLeftBgSinceMs = 0;
+    bgLeaveQueued = true;
+    bgLeaveQueuedMs = now;
+    LOG_INFO("playerbots", "PBBG1C: {} queues leaving battleground {}: its player left ({} ms ago)", bot->GetName(),
+             bgId, waited);
+    PlayerbotWorldThreadProcessor::instance().QueueOperation(
+        std::make_unique<BattlegroundLeaveOperation>(bot->GetGUID()));
+}
+
 void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal)
 {
 
@@ -582,6 +723,8 @@ void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal
     }
 
     HandleCommands();
+
+    FollowMasterOutOfBattleground();
 
     // logout if logout timer is ready or if instant logout is possible
     if (bot->GetSession()->isLogingOut())

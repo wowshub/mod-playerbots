@@ -1806,6 +1806,9 @@ void MovementAction::DoMovePoint(Unit* unit, float x, float y, float z, bool gen
     if (!mm)
         return;
 
+    if (generatePath && !IsSafePointMove(unit, x, y, z))
+        return;
+
     // bot water collision correction
     if (unit->HasUnitMovementFlag(MOVEMENTFLAG_WATERWALKING) && unit->HasWaterWalkAura())
     {
@@ -1834,6 +1837,42 @@ void MovementAction::DoMovePoint(Unit* unit, float x, float y, float z, bool gen
             /*generatePath*/ generatePath,  // true => terrain path (2d mmap); false => straight spline (3d vmap)
             /*forceDestination*/ false);
     }
+}
+
+// RebornWOW PBMOVE1A. When PathGenerator finds no navmesh route, the core's
+// PointMovementGenerator falls back to a straight spline to the destination
+// (PointMovementGenerator::DoInitialize -> init.MoveTo). If that destination
+// lies on another floor (a spot picked off a platform edge resolves to the
+// ground under it), the bot walks straight down through the floor and back:
+// Gundrak, ranged bots sank from z 136 to ~59 under the Gal'darah platform and
+// the Colossus room, then FOLLOW pulled them up again. Small height changes
+// are never checked (no extra cost); a big one is allowed only on a real
+// navmesh path, otherwise the move is skipped and re-decided next tick.
+bool MovementAction::IsSafePointMove(Unit* unit, float x, float y, float z)
+{
+    constexpr float kMaxStraightDz = 6.0f;
+    if (unit->IsFlying() || unit->IsInWater() || unit->GetVehicle() || unit->IsVehicle())
+        return true;
+    float const dz = std::fabs(z - unit->GetPositionZ());
+    if (dz <= kMaxStraightDz)
+        return true;
+
+    PathGenerator path(unit);
+    path.CalculatePath(x, y, z, false);
+    uint32 const type = path.GetPathType();
+    if (!(type & (PATHFIND_NOPATH | PATHFIND_SHORTCUT | PATHFIND_NOT_USING_PATH)))
+        return true;
+
+    uint32 const now = getMSTime();
+    if (!lastUnsafeMoveLogMs || getMSTimeDiff(lastUnsafeMoveLogMs, now) >= 10000)
+    {
+        lastUnsafeMoveLogMs = now;
+        LOG_INFO("playerbots",
+                 "PBMOVE1A: {} skipped a straight move from action '{}' map {} ({:.1f},{:.1f},{:.1f}) -> ({:.1f},{:.1f},{:.1f}) dz {:.1f} pathType {}",
+                 unit->GetName(), getName(), unit->GetMapId(), unit->GetPositionX(), unit->GetPositionY(),
+                 unit->GetPositionZ(), x, y, z, dz, type);
+    }
+    return false;
 }
 
 bool FleeAction::Execute(Event /*event*/)

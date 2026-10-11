@@ -607,6 +607,12 @@ public:
     NewRpgStatistic rpgStatistic;
     std::unordered_set<uint32> lowPriorityQuest;
     time_t bgReleaseAttemptTime = 0;
+    // RebornWOW PBBG1A/1B: getMSTime() since the owning player left this bot's battleground (0 = not)
+    uint32 masterLeftBgSinceMs = 0;
+    uint32 bgLeaveDiagMs = 0;  // PBBG1B: last diagnostic line
+    bool bgLeaveQueued = false;  // PBBG1C: leave handed to the world thread, wait for it
+    uint32 bgLeaveQueuedMs = 0;  // when it was queued; re-queue if still in the BG 10 s later
+    void FollowMasterOutOfBattleground();
 
     // Schedules a callback to run once after <delayMs> milliseconds.
     void AddTimedEvent(std::function<void()> callback, uint32 delayMs);

@@ -19,6 +19,7 @@
 #include "Common.h"
 #include "Define.h"
 #include "Group.h"
+#include "Timer.h"
 #include "GuildMgr.h"
 #include "ObjectAccessor.h"
 #include "ObjectGuid.h"
@@ -1496,6 +1497,20 @@ void PlayerbotMgr::UpdateAIInternal(uint32 elapsed, bool /*minimal*/)
 {
     SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
     CheckTellErrors(elapsed);
+    RefreshGroupForMaster();
+}
+
+// Wall-clock delay: `elapsed` above is only the last world tick, not the time since the
+// previous call, so it cannot count the 3 seconds.
+void PlayerbotMgr::RefreshGroupForMaster()
+{
+    if (!groupRefreshPending || getMSTimeDiff(groupRefreshFrom, getMSTime()) < 3000)
+        return;
+    if (!master || !master->IsInWorld())
+        return;  // still loading: try again on a later tick
+    groupRefreshPending = false;
+    if (Group* group = master->GetGroup())
+        group->SendUpdate();
 }
 
 void PlayerbotMgr::HandleCommand(uint32 type, std::string const text)
@@ -1636,6 +1651,10 @@ void PlayerbotMgr::OnBotLoginInternal(Player* const bot)
     }
     botAI->SetMaster(master);
     botAI->ResetStrategies();
+
+    // resend the master's group list a few seconds after the last bot login (PBGRP1A)
+    groupRefreshPending = true;
+    groupRefreshFrom = getMSTime();
 
     LOG_INFO("playerbots", "Bot {} logged in", bot->GetName().c_str());
 }
