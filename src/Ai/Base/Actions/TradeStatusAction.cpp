@@ -20,6 +20,12 @@
 
 bool TradeStatusAction::Execute(Event event)
 {
+    // RebornWOW PBTRADE1A: a self-bot (a real player whose character the AI plays,
+    // master == bot) trades through its own client. The AI must neither accept nor
+    // cancel on the player's behalf.
+    if (botAI->IsRealPlayer())
+        return false;
+
     Player* trader = bot->GetTrader();
     Player* master = GetMaster();
     if (!trader)
@@ -133,7 +139,11 @@ bool TradeStatusAction::Execute(Event event)
 void TradeStatusAction::BeginTrade()
 {
     Player* trader = bot->GetTrader();
-    if (!trader || GET_PLAYERBOT_AI(bot->GetTrader()))
+    // RebornWOW PBTRADE1A: a self-bot trader is a real client and waits for this
+    // begin-trade like any player; only a true bot trader is skipped. Before, a
+    // player on Auto-play could not trade a bot at all ("You are already trading").
+    PlayerbotAI* traderAI = trader ? GET_PLAYERBOT_AI(trader) : nullptr;
+    if (!trader || (traderAI && !traderAI->IsRealPlayer()))
         return;
 
     WorldPacket p;
