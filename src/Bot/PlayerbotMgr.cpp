@@ -1510,7 +1510,18 @@ void PlayerbotMgr::RefreshGroupForMaster()
         return;  // still loading: try again on a later tick
     groupRefreshPending = false;
     if (Group* group = master->GetGroup())
+    {
         group->SendUpdate();
+        // PBGRP1B: the client asked for these names when the master logged in, while the
+        // bots were still offline, and does not ask again when they come online, so the
+        // party frames kept showing "Unknown" until /reload. Push every member's name.
+        if (WorldSession* session = master->GetSession())
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                if (slot.guid != master->GetGUID())
+                    session->SendNameQueryOpcode(slot.guid);
+        LOG_INFO("playerbots", "PBGRP1B: refreshed party list and {} member name(s) for {}",
+                 group->GetMembersCount() - 1, master->GetName());
+    }
 }
 
 void PlayerbotMgr::HandleCommand(uint32 type, std::string const text)
