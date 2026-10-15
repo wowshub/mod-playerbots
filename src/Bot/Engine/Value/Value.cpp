@@ -13,11 +13,12 @@
 UnitCalculatedValue::UnitCalculatedValue(PlayerbotAI* botAI, std::string const name, int32 checkInterval)
     : CalculatedValue<Unit*>(botAI, name, checkInterval)
 {
+    value = nullptr;
 }
 
 std::string const UnitCalculatedValue::Format()
 {
-    Unit* unit = Calculate();
+    Unit* unit = Get();
     return unit ? unit->GetName() : "<none>";
 }
 
@@ -120,33 +121,64 @@ std::string const ObjectGuidListCalculatedValue::Format()
     return out.str();
 }
 
+// MBCRASH1B: resolve identity on every read, including inside the cache window.
+// This runs in the normal map update context; it is not a cross-thread lifetime lock.
+Unit* UnitCalculatedValue::ResolveCachedUnit()
+{
+    value = nullptr;
+    if (cachedGuid.IsEmpty() || !bot->IsInWorld() || bot->IsDuringRemoveFromWorld())
+        return nullptr;
+
+    Unit* fresh = ObjectAccessor::GetUnit(*bot, cachedGuid);
+    if (fresh && fresh->IsInWorld() && !fresh->IsDuringRemoveFromWorld())
+        value = fresh;
+    return value;
+}
+
 Unit* UnitCalculatedValue::Get()
 {
-    if (checkInterval < 2)
+    uint32 const now = getMSTime();
+    // Unsigned subtraction also handles the millisecond clock wrapping.
+    if (checkInterval < 2 || !cacheInitialized || uint32(now - lastCheckTime) >= checkInterval)
     {
         PerfMonitorOperation* pmo = sPerfMonitor.start(
             PERF_MON_VALUE, this->getName(), this->context ? &this->context->performanceStack : nullptr);
-        value = Calculate();
+        Set(Calculate());
+        lastCheckTime = now;
         if (pmo)
             pmo->finish();
     }
-    else
-    {
-        time_t now = getMSTime();
-        if (!lastCheckTime || now - lastCheckTime >= checkInterval)
-        {
-            lastCheckTime = now;
-            PerfMonitorOperation* pmo = sPerfMonitor.start(
-                PERF_MON_VALUE, this->getName(), this->context ? &this->context->performanceStack : nullptr);
-            value = Calculate();
-            if (pmo)
-                pmo->finish();
-        }
-    }
-    // Prevent crashing by InWorld check
-    if (value && value->IsInWorld())
-        return value;
-    return nullptr;
+    return ResolveCachedUnit();
+}
+
+Unit* UnitCalculatedValue::LazyGet()
+{
+    return cacheInitialized ? ResolveCachedUnit() : Get();
+}
+
+Unit*& UnitCalculatedValue::RefGet()
+{
+    Get();
+    // Legacy interface: callers must use Set() to change identity, and must not
+    // retain this borrowed result across updates. No Unit* RefGet writers exist
+    // in the audited module. Never derive cachedGuid from this scratch pointer.
+    return value;
+}
+
+void UnitCalculatedValue::Set(Unit* unit)
+{
+    // Only a freshly calculated / caller-owned live pointer may enter Set().
+    cachedGuid = unit ? unit->GetGUID() : ObjectGuid::Empty;
+    value = nullptr;
+    cacheInitialized = true;
+}
+
+void UnitCalculatedValue::Reset()
+{
+    cachedGuid = ObjectGuid::Empty;
+    value = nullptr;
+    lastCheckTime = 0;
+    cacheInitialized = false;
 }
 
 Unit* UnitManualSetValue::Get()

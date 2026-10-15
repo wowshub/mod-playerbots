@@ -311,6 +311,17 @@ public:
 
     std::string const Format() override;
     Unit* Get() override;
+    Unit* LazyGet() override;
+    Unit*& RefGet() override;
+    void Set(Unit* unit) override;
+    void Reset() override;
+
+private:
+    // MBCRASH1B: a cached pointer cannot validate its own lifetime.
+    // value is only a return scratch slot; never read it to resolve a target.
+    Unit* ResolveCachedUnit();
+    ObjectGuid cachedGuid;
+    bool cacheInitialized = false;
 };
 
 class CDPairCalculatedValue : public CalculatedValue<CreatureData const*>
