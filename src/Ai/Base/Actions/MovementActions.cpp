@@ -1654,6 +1654,15 @@ bool MovementAction::Move(float angle, float distance)
                                                         bot->GetPositionZ(), x, y, z, false))
         return false;
 
+    // RebornWOW DCMOV3A: a short step (Move() is used for <=10yd nudges, e.g. Loken
+    // stacking) never changes floor in a dungeon. Where the server's height data
+    // misses a floor (Halls of Lightning, Loken's room: floor at z 60.7, ground
+    // probe -13.9) the probe answers the floor below and the bot walked down
+    // into the void. Keep the current height and let the z-search in MoveTo
+    // settle it on the navmesh.
+    if (bot->GetMap()->IsDungeon() && std::fabs(z - bot->GetPositionZ()) > 4.0f)
+        z = bot->GetPositionZ();
+
     return MoveTo(bot->GetMapId(), x, y, z);
 }
 
