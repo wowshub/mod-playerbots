@@ -1388,7 +1388,13 @@ bool MovementAction::Flee(Unit* target)
         }
     }
 
-    Unit* currentVictim = target->GetThreatMgr().GetCurrentVictim();
+    // RebornWOW PBSELF1A (upstream #2731, open): with no target, `target` is the master --
+    // for a self-bot that is the player itself. GetCurrentVictim() on a Player reaches
+    // ThreatManager::ProcessAIUpdates, which asserts the owner is a Creature, and the
+    // worldserver dies. Only a creature with a threat list has a current victim.
+    Unit* currentVictim = (target->ToCreature() && target->GetThreatMgr().CanHaveThreatList())
+                              ? target->GetThreatMgr().GetCurrentVictim()
+                              : nullptr;
     if (currentVictim && currentVictim == bot)  // bot is target - try to flee to tank or master
     {
         if (Group* group = bot->GetGroup())

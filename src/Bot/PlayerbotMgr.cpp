@@ -1063,6 +1063,12 @@ std::vector<std::string> PlayerbotHolder::HandlePlayerbotCommand(char const* arg
         {
             messages.push_back("Disable player botAI");
             delete GET_PLAYERBOT_AI(master);
+
+            // RebornWOW PBSELF1A: port of upstream #2824 (issue #2724). The AI set the taxi
+            // cheat (AiPlayerbot.BotCheats "taxi"); without this the player kept every
+            // flight path, and the flag is saved with the character.
+            if (master->isTaxiCheater())
+                master->SetTaxiCheater(false);
         }
         else if (sPlayerbotAIConfig.selfBotLevel == 0)
             messages.push_back("Self-bot is disabled");
