@@ -1381,6 +1381,10 @@ std::string const PlayerbotHolder::ListBots(Player* master)
     classNames[CLASS_WARLOCK] = "Warlock";
     classNames[CLASS_WARRIOR] = "Warrior";
     classNames[CLASS_DEATH_KNIGHT] = "DeathKnight";
+    // RebornWOW MBC1B: the custom classes, one word each -- MultiBot splits "+Name Class"
+    // on spaces and drops an entry whose class it cannot read (they went out empty).
+    classNames[CLASS_WITCH_DOCTOR] = "WitchDoctor";
+    classNames[CLASS_MONK] = "Monk";
 
     std::map<std::string, std::string> online;
     std::vector<std::string> names;
