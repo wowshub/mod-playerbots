@@ -46,6 +46,7 @@
 #include "Playerbots.h"
 #include "PositionValue.h"
 #include "RBAC.h"
+#include "RaceMgr.h"  // RebornWOW UP1B
 #include "RandomPlayerbotMgr.h"
 #include "BattleGroundJoinAction.h"
 #include "Group.h"
@@ -4639,10 +4640,17 @@ bool PlayerbotAI::canDispel(SpellInfo const* spellInfo, uint32 dispelType)
                                         strcmpi((const char*)spellInfo->SpellName[0], "ice armor"));
 }
 
+// RebornWOW UP1B (upstream mod-playerbots #2875): the side comes from the race table, not from a
+// fixed list of the five original Alliance races. Same source as Player::GetTeamId(); a race
+// that is not playable (NPC races) is "not Alliance" as before -- TeamIdForRace() would log an
+// error for it.
 bool IsAlliance(uint8 race)
 {
-    return race == RACE_HUMAN || race == RACE_DWARF || race == RACE_NIGHTELF || race == RACE_GNOME ||
-           race == RACE_DRAENEI;
+    uint32 const raceBit = GetRaceMaskForRace(race);
+    if (!raceBit || !(sRaceMgr->GetPlayableRaceMask() & raceBit))
+        return false;
+
+    return Player::TeamIdForRace(race) == TEAM_ALLIANCE;
 }
 
 Player* PlayerbotAI::FindNewMaster()

@@ -3732,15 +3732,17 @@ void PlayerbotFactory::InitMounts()
             fast = {35025, 35025, 35027};
             break;
         default:
+            // RebornWOW UP1B (upstream mod-playerbots #2875): the two lists were swapped -- Horde got the
+            // human horses, Alliance the orc wolves. Only races without their own case get here.
             if (bot->GetTeamId() == TEAM_HORDE)
             { // Orc mounts
-                slow = {470, 6648, 458, 472};
-                fast = {23228, 23227, 23229};
+                slow = {6654, 6653, 580};
+                fast = {23250, 23252, 23251};
             }
             else // Human mounts
             {
-                slow = {6654, 6653, 580};
-                fast = {23250, 23252, 23251};
+                slow = {470, 6648, 458, 472};
+                fast = {23228, 23227, 23229};
             }
     }
 

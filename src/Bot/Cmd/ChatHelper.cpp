@@ -8,10 +8,12 @@
 
 #include "AiFactory.h"
 #include "Common.h"
+#include "DBCStores.h"  // RebornWOW UP1B
 #include "ItemTemplate.h"
 #include "ObjectMgr.h"
 #include "Playerbots.h"
 #include "SpellInfo.h"
+#include "World.h"  // RebornWOW UP1B
 
 #include <regex>
 
@@ -630,7 +632,26 @@ std::string const ChatHelper::FormatClass(Player* player, int8 spec)
 
 std::string const ChatHelper::FormatClass(uint8 cls) { return classes[cls]; }
 
-std::string const ChatHelper::FormatRace(uint8 race) { return races[race]; }
+// RebornWOW UP1B (upstream mod-playerbots #2875): races[race] would insert an empty entry for an
+// unknown race from whichever map thread asks, and named every custom race "". find(), then the
+// ChrRaces name (enUS like the map, else the server's DBC locale).
+std::string const ChatHelper::FormatRace(uint8 race)
+{
+    auto itr = races.find(race);
+    if (itr != races.end())
+        return itr->second;
+
+    if (ChrRacesEntry const* entry = sChrRacesStore.LookupEntry(race))
+    {
+        char const* name = entry->name[LOCALE_enUS];
+        if (!name || !*name)
+            name = entry->name[sWorld->GetDefaultDbcLocale()];
+        if (name && *name)
+            return name;
+    }
+
+    return "";
+}
 
 uint32 ChatHelper::parseSkill(std::string const text)
 {
