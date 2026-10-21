@@ -113,6 +113,8 @@ inline Choice Choose(PlayerbotAI* ai)
  if(!Engaged(b,enemy,master))return {};
  // Get into casting range before spending three global cooldowns on immobile summons far from the fight.
  uint32 attack=b->HasSpell(9003968)?s.spells[5].learned:s.spells[0].learned;
+ // WD176: keep the real proc replacement ID through native prepare and damage hooks.
+ if(s.plan.spec==0&&s.spells[0].replacement==9003822)attack=9003822;
  auto approach=Offer(ai,attack,enemy,true);if(approach.reposition)return approach;
  // Do not spend an expiring Price window on summon maintenance; emergency heals still win.
  bool priceReady=b->HasAura(9004175,b->GetGUID());
@@ -137,7 +139,7 @@ inline Choice Choose(PlayerbotAI* ai)
  }
  if(auto c=Offer(ai,attack,enemy,true);c.spell)return c;
  // Missing ranged weapon/ammo must not freeze every otherwise legal spell.
- if(attack!=s.spells[0].learned)return Offer(ai,s.spells[0].learned,enemy,true);
+ if(attack!=s.spells[0].learned&&!(s.plan.spec==0&&s.spells[0].replacement==9003822))return Offer(ai,s.spells[0].learned,enemy,true);
  return {};
 }
 class TickAction:public MovementAction
@@ -194,7 +196,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD175 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD176 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
