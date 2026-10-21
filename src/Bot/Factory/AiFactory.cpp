@@ -5,6 +5,7 @@
  */
 
 #include "AiFactory.h"
+#include "../../Ai/Class/WitchDoctor/WitchDoctorAiObjectContext.h"
 
 #include "BattlegroundMgr.h"
 #include "DKAiObjectContext.h"
@@ -40,6 +41,7 @@ AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* b
 {
     switch (player->getClass())
     {
+        case 13:return new RebornWD169::Context(botAI);
         case CLASS_PRIEST:
             return new PriestAiObjectContext(botAI);
         case CLASS_MAGE:
@@ -67,6 +69,7 @@ AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* b
 
 uint8 AiFactory::GetPlayerSpecTab(Player* bot)
 {
+    if(bot->getClass()==13){auto p=WD168::ReadPlan(bot);return p.available?uint8(p.spec):0;}
     std::map<uint8, uint32> tabs = GetPlayerSpecTabs(bot);
 
     if (bot->GetLevel() >= 10 && ((tabs[0] + tabs[1] + tabs[2]) > 0))
@@ -141,6 +144,7 @@ std::map<uint8, uint32> AiFactory::GetPlayerSpecTabs(Player* bot)
 
 BotRoles AiFactory::GetPlayerRoles(Player* player)
 {
+    if(player->getClass()==13){auto p=WD168::ReadPlan(player);return p.available&&p.spec==1?BOT_ROLE_HEALER:BOT_ROLE_DPS;}
     BotRoles role = BOT_ROLE_NONE;
     uint8 tab = GetPlayerSpecTab(player);
 
@@ -295,6 +299,9 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 
     switch (player->getClass())
     {
+        case 13:
+            engine->addStrategiesNoInit("wd169 combat", "dps assist", nullptr);
+            break;
         case CLASS_PRIEST:
             if (tab == PRIEST_TAB_SHADOW)
                 engine->addStrategiesNoInit("dps", "shadow debuff", "shadow aoe", nullptr);
@@ -509,6 +516,9 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
 
     switch (player->getClass())
     {
+        case 13:
+            nonCombatEngine->addStrategiesNoInit("wd169 support", "dps assist", nullptr);
+            break;
         case CLASS_PRIEST:
             nonCombatEngine->addStrategiesNoInit("dps assist", "cure", "rshadow", nullptr);
             break;

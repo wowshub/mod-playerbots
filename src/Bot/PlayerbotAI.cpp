@@ -4,6 +4,7 @@
  */
 
 #include "PlayerbotAI.h"
+#include "../../../mod-reborn-witchdoctor/src/RebornWitchDoctorBotState168.h"
 #include "CreatureNameAlias.h"
 
 #include <cmath>
@@ -2509,6 +2510,7 @@ bool PlayerbotAI::IsTank(Player* player, bool bySpec)
 
 bool PlayerbotAI::IsHeal(Player* player, bool bySpec)
 {
+    if(bySpec&&player->getClass()==13){auto p=WD168::ReadPlan(player);return p.available&&p.spec==1;}
     PlayerbotAI* botAi = GET_PLAYERBOT_AI(player);
     if (!bySpec && botAi)
         return botAi->ContainsStrategy(STRATEGY_TYPE_HEAL);
@@ -2546,6 +2548,7 @@ bool PlayerbotAI::IsHeal(Player* player, bool bySpec)
 
 bool PlayerbotAI::IsDps(Player* player, bool bySpec)
 {
+    if(bySpec&&player->getClass()==13){auto p=WD168::ReadPlan(player);return p.available&&p.spec!=1;}
     PlayerbotAI* botAi = GET_PLAYERBOT_AI(player);
     if (!bySpec && botAi)
         return botAi->ContainsStrategy(STRATEGY_TYPE_DPS);
