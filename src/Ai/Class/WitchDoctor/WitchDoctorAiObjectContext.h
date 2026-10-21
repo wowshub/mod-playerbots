@@ -6,6 +6,7 @@
 #include "Action.h"
 #include "MovementActions.h"
 #include "WitchDoctorEquipment170.h"
+#include "WitchDoctorTeam171.h"
 #include "Timer.h"
 #include "Log.h"
 #include "PlayerbotAI.h"
@@ -31,6 +32,7 @@ inline bool Engaged(Player* b,Unit* u,Player* master)
  if(u->GetTypeId()==TYPEID_PLAYER&&b->IsInRaidWith(u))return false;
  if(u->HasAuraType(SPELL_AURA_REFLECT_SPELLS)||u->HasAuraType(SPELL_AURA_REFLECT_SPELLS_SCHOOL))return false;
  if(b->IsInCombatWith(u))return true;
+ if(Unit* victim=u->GetVictim())if(RebornWD171::Member(b,victim)&&victim->IsInCombatWith(u))return true;
  if(master&&master->IsAlive()&&b->IsInMap(master)&&b->InSamePhase(master)&&master->IsInCombatWith(u))return true;
  if(auto* group=b->GetGroup())for(auto* ref=group->GetFirstMember();ref;ref=ref->next())
   if(auto* ally=ref->GetSource())if(ally->IsAlive()&&b->IsInMap(ally)&&b->InSamePhase(ally)&&ally->IsInCombatWith(u))return true;
@@ -58,7 +60,7 @@ inline bool Prepared(PlayerbotAI* ai,uint32 spell)
  {int32 cost=info->CalcPowerCost(b,info->GetSchoolMask());if(cost>0&&int32(b->GetPower(Powers(info->PowerType)))<cost)return false;}
  return true;
 }
-struct Choice{uint32 spell=0;Unit* target=nullptr;bool damage=false;bool reposition=false;};
+struct Choice{uint32 spell=0;Unit* target=nullptr;bool damage=false;bool reposition=false;char const* reason="rotation";};
 inline Choice Offer(PlayerbotAI* ai,uint32 spell,Unit* target,bool damage)
 {
  if(!target||!Prepared(ai,spell))return {};
@@ -75,7 +77,7 @@ inline bool PartyCombat(PlayerbotAI* ai)
  auto busy=[&](Player* p){return p&&p->IsInWorld()&&b->IsInMap(p)&&b->InSamePhase(p)&&p->IsInCombat();};
  if(busy(ai->GetMaster()))return true;
  if(auto* g=b->GetGroup())for(auto* r=g->GetFirstMember();r;r=r->next())if(busy(r->GetSource()))return true;
- return false;
+ return RebornWD171::NPCCombat(b);
 }
 inline bool Occupied(WD168::Snapshot const& s)
 {for(auto const& slot:s.summons)if(slot.present)return true;return false;}
@@ -83,12 +85,23 @@ inline Choice Choose(PlayerbotAI* ai)
 {
  Player* b=ai->GetBot();auto s=WD168::Capture(b);
  if(!s.plan.available||!s.alive||!s.inWorld||b->IsBeingTeleported()||(b->IsNonMeleeSpellCast(false,false,true)||b->HasUnitState(UNIT_STATE_LOST_CONTROL))||!b->GetCharmerGUID().IsEmpty())return {};
+ bool partyCombat=PartyCombat(ai);
+ auto scene=RebornWD171::Observe(b,partyCombat,[&](Unit* u){return Engaged(b,u,ai->GetMaster());});
  bool healer=s.plan.spec==1,healingNeeded=false;Choice heal;float health=healer?85.f:40.f;
  auto consider=[&](Unit* u){if(MemberTarget(b,u)&&u->GetHealthPct()<health){healingNeeded=true;if(auto c=Offer(ai,s.spells[1].learned,u,false);c.spell){health=u->GetHealthPct();heal=c;}}};
  consider(b);
  if(healer)if(auto* group=b->GetGroup())for(auto* ref=group->GetFirstMember();ref;ref=ref->next())consider(ref->GetSource());
+ if(healer)for(Unit* u:scene.members)if(u->GetTypeId()!=TYPEID_PLAYER)consider(u);
  if(heal.spell)return heal;
- if(healer&&healingNeeded)return {};
+ if(healer&&healingNeeded)
+ {
+  // A blocked heal must not also block the real zero-cost mana recovery opportunity.
+  if(!s.summons[1].present&&scene.uncoveredMana&&CanUse(ai,9003370,b))return {9003370,b,false,false,"healer_blocked_low_mana"};
+  return {};
+ }
+ if(!partyCombat)
+  if(auto d=RebornWD171::Buff(b,scene,s.plan.spec,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+   return {d.spell,d.target,false,false,d.reason};
  Unit* enemy=nullptr;
  if(auto* value=ai->GetAiObjectContext()->GetValue<Unit*>("current target"))enemy=value->Get();
  Player* master=ai->GetMaster();
@@ -100,21 +113,8 @@ inline Choice Choose(PlayerbotAI* ai)
  // Get into casting range before spending three global cooldowns on immobile summons far from the fight.
  uint32 attack=b->HasSpell(9003968)?s.spells[5].learned:s.spells[0].learned;
  auto approach=Offer(ai,attack,enemy,true);if(approach.reposition)return approach;
- for(uint32 i=0;i<3;++i)
- {
-  if(s.summons[i].present)continue;
-  uint32 selected=s.summons[i].selected;
-  if(!selected)
-  {
-   if(i==0)selected=healer&&b->HasSpell(9003170)?9003170:s.spells[3].learned;
-   if(i==1){for(uint32 id:{9003953u,9003370u,9003440u,9003432u})if(b->HasSpell(id)){selected=id;break;}}
-   if(i==2&&b->HasSpell(9003420))selected=9003420; // reactive Hexing Effigy; no autonomous field on idle enemies.
-  }
-  // Offensive field effigies/stasis await a separate secondary-target audit. Never silently replace a selected family.
-  bool safe=i==0?(selected==9003160||selected==9003170||selected==9003400):
-   i==1?(selected==9003953||selected==9003370||selected==9003440||selected==9003432||selected==9003382||selected==9003380||selected==9003390):selected==9003420;
-  if(safe)if(auto c=Offer(ai,selected,b,false);c.spell)return c;
- }
+ if(auto d=RebornWD171::Summon(b,s,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,false,false,d.reason};
  if(s.plan.spec==2)
  {
   // Price of the Spirits is finite: use the actual learned Glaive during its window.
@@ -187,7 +187,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD170 {} spec={} spell={} souls={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD171 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
