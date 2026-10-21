@@ -113,16 +113,20 @@ inline Choice Choose(PlayerbotAI* ai)
  // Get into casting range before spending three global cooldowns on immobile summons far from the fight.
  uint32 attack=b->HasSpell(9003968)?s.spells[5].learned:s.spells[0].learned;
  auto approach=Offer(ai,attack,enemy,true);if(approach.reposition)return approach;
+ // Do not spend an expiring Price window on summon maintenance; emergency heals still win.
+ bool priceReady=b->HasAura(9004175,b->GetGUID());
+ if(s.plan.spec==2&&priceReady)if(auto c=Offer(ai,s.spells[8].learned,enemy,true);c.spell){c.reason="price_glaive";return c;}
  if(auto d=RebornWD171::Summon(b,s,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,false,false,d.reason};
  if(s.plan.spec==2)
  {
-  // Price of the Spirits is finite: use the actual learned Glaive during its window.
-  if(b->HasAura(9004175,b->GetGUID()))if(auto c=Offer(ai,s.spells[8].learned,enemy,true);c.spell)return c;
   // Do not refresh our own still-active Hex every tick; another doctor's aura is not ours.
   bool ownHex=false;for(uint32 id:{9003104u,9003106u,9003107u,9003108u,9003109u,9003110u,9003111u,9003112u})
    if(enemy->HasAura(id,b->GetGUID())){ownHex=true;break;}
   if(!ownHex&&s.spells[2].replacement==0)if(auto c=Offer(ai,s.spells[2].learned,enemy,true);c.spell)return c;
+  // Eclipse snapshots Spirits, it does not consume them. Only the native completed cast grants Price.
+  // Keep an existing window; missing talent/Glaive must not block the learned Eclipse itself.
+  if(s.souls==5&&!priceReady)if(auto c=Offer(ai,s.spells[7].learned,enemy,true);c.spell){c.reason="five_spirit_eclipse";return c;}
   // Reclamation is the real Spirit generator. The mapped single-target Volley is a real cast, never a synthetic proc.
   uint32 generator=s.spells[6].replacement==9004174?s.spells[6].replacement:s.spells[6].learned;
   if(s.souls<5||s.spells[6].replacement==9004174)if(auto c=Offer(ai,generator,enemy,true);c.spell)return c;
@@ -187,7 +191,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD171 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD172 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
