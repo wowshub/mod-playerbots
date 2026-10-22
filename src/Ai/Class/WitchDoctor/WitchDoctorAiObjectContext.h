@@ -114,6 +114,18 @@ inline Choice BeamSideChoice(PlayerbotAI* ai)
   [&](uint32 id,Unit* u)->Choice{return id&&can(id,u)?Choice{id,u,false,false,"beam_side_heal"}:Choice{};},can);
  return triage.choice; // No preparation, summons, cures or repositioning during a channel.
 }
+inline Unit* CurrentEnemy(PlayerbotAI* ai)
+{
+ auto* b=ai->GetBot();
+ Unit* enemy=nullptr;
+ if(auto* value=ai->GetAiObjectContext()->GetValue<Unit*>("current target"))enemy=value->Get();
+ Player* master=ai->GetMaster();
+ if(!Engaged(b,enemy,master)&&master)enemy=master->GetSelectedUnit();
+ // Native combat may know the actual attacker before the assist target refreshes.
+ if(!Engaged(b,enemy,master))enemy=b->GetVictim();
+ if(!Engaged(b,enemy,master))for(auto* attacker:b->getAttackers())if(Engaged(b,attacker,master)){enemy=attacker;break;}
+ return Engaged(b,enemy,master)?enemy:nullptr;
+}
 inline Choice Choose(PlayerbotAI* ai)
 {
  Player* b=ai->GetBot();
@@ -154,13 +166,7 @@ inline Choice Choose(PlayerbotAI* ai)
  if(!partyCombat)
   if(auto d=RebornWD171::Buff(b,scene,s.plan.spec,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
    return {d.spell,d.target,false,false,d.reason};
- Unit* enemy=nullptr;
- if(auto* value=ai->GetAiObjectContext()->GetValue<Unit*>("current target"))enemy=value->Get();
- Player* master=ai->GetMaster();
- if(!Engaged(b,enemy,master)&&master)enemy=master->GetSelectedUnit();
- // Native combat may know the actual attacker before the assist target refreshes.
- if(!Engaged(b,enemy,master))enemy=b->GetVictim();
- if(!Engaged(b,enemy,master))for(auto* attacker:b->getAttackers())if(Engaged(b,attacker,master)){enemy=attacker;break;}
+ Unit* enemy=CurrentEnemy(ai);Player* master=ai->GetMaster();
  if(!Engaged(b,enemy,master))return {};
  if(auto d=RebornWD189::Defense(b,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,false,false,d.reason};
@@ -303,6 +309,7 @@ public:
   if(!CanUse(ai,next.spell,next.target))return false;
   if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD193 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
+  WD196::TargetScope controlTarget(b,next.spell==9003861?next.target:nullptr,next.spell==9003861?CurrentEnemy(ai):nullptr);
   return ai->CastSpell(next.spell,next.target);
  }
 };
