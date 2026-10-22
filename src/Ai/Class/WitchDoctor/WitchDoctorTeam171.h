@@ -77,9 +77,17 @@ inline bool Restoration(uint32 spell,bool mana,uint32 depth=0)
  }
  return false;
 }
+// WD193: Swift is movement/resistance, not attack haste or a root cleanse.
+inline bool SwiftRecipient(Player* b,Unit* u)
+{
+ return Member(b,u)&&u->IsInCombat()&&u->isMoving()&&
+  !u->HasAuraType(SPELL_AURA_MOD_ROOT)&&!u->HasAura(9003433)&&
+  b->IsWithinDistInMap(u,28.f)&&b->IsWithinLOSInMap(u);
+}
 struct Scene
 {
  std::vector<Unit*> members,hostiles;
+ uint32 swiftMoving=0;
  uint32 injured=0,uncoveredHealing=0,critical=0,lowMana=0,uncoveredMana=0,enemies=0,castingEnemies=0,physical=0;
  uint32 linkLow=0,linkHigh=0,linkPlayers=0,dispelNeeded=0;
 };
@@ -107,6 +115,7 @@ template<class EnemyGate>inline Scene Observe(Player* b,bool combat,EnemyGate en
  }
  for(Unit* u:out.members)
  {
+  if(SwiftRecipient(b,u))++out.swiftMoving;
   if(Physical(u))++out.physical;
   if(!b->IsWithinDistInMap(u,30.f)||!b->IsWithinLOSInMap(u))continue;
   bool hurt=u->GetHealthPct()<75.f,low=u->getPowerType()==POWER_MANA&&u->GetMaxPower(POWER_MANA)>0&&u->GetPower(POWER_MANA)*100ull<u->GetMaxPower(POWER_MANA)*65ull;
@@ -205,7 +214,7 @@ template<class Can>inline Decision Summon(Player* b,WD168::Snapshot const& s,Sce
  if(s.plan.spec!=1&&t.enemies>=3&&s.massWards==0&&!b->HasAura(9004080,b->GetGUID())&&s.maxMana&&s.mana*100ull>=s.maxMana*45ull)
   if(auto d=choose(9004080,"three_engaged_enemies");d.spell)return d;
  if(!s.summons[0].present)if(auto d=choose(9003160,"single_attack_ward_missing");d.spell)return d;
- if(!s.summons[1].present&&s.summons[1].selected&&s.summons[1].selected!=9003370&&s.summons[1].selected!=9003953&&s.summons[1].selected!=9003440)
+ if(!s.summons[1].present&&s.summons[1].selected&&s.summons[1].selected!=9003370&&s.summons[1].selected!=9003953&&s.summons[1].selected!=9003440&&s.summons[1].selected!=9003432)
   if(auto d=choose(s.summons[1].selected,"selected_support_idol");d.spell)return d;
  if(!s.summons[2].present&&t.castingEnemies)if(auto d=choose(9003420,"engaged_enemy_casting");d.spell)return d;
  return {};

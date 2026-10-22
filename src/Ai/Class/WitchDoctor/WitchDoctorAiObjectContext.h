@@ -11,6 +11,7 @@
 #include "WitchDoctorVoodoo189.h"
 #include "WitchDoctorCooldown190.h"
 #include "WitchDoctorVeil192.h"
+#include "WitchDoctorIdol193.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -160,6 +161,11 @@ inline Choice Choose(PlayerbotAI* ai)
  if(!Engaged(b,enemy,master))return {};
  if(auto d=RebornWD189::Defense(b,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,false,false,d.reason};
+ bool swiftForced=false;
+ if(auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement"))
+ {auto const& m=value->Get();swiftForced=m.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(m.msTime,getMSTime())<m.lastdelayTime;}
+ if(auto d=RebornWD193::Swift(b,s,scene,swiftForced,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,false,false,d.reason};
  // Get into casting range before spending three global cooldowns on immobile summons far from the fight.
  uint32 attack=b->HasSpell(9003968)?s.spells[5].learned:s.spells[0].learned;
  // WD176: keep the real proc replacement ID through native prepare and damage hooks.
@@ -276,7 +282,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD192 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD193 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
