@@ -13,6 +13,7 @@
 #include "WitchDoctorVeil192.h"
 #include "WitchDoctorIdol193.h"
 #include "WitchDoctorControl196.h"
+#include "WitchDoctorInterrupt197.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -165,6 +166,8 @@ inline Choice Choose(PlayerbotAI* ai)
  bool swiftForced=false;
  if(auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement"))
  {auto const& m=value->Get();swiftForced=m.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(m.msTime,getMSTime())<m.lastdelayTime;}
+ if(auto d=RebornWD197::Choose(b,enemy,scene,swiftForced,[&](Unit* u){return Engaged(b,u,master);},[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,true,false,d.reason};
  if(auto d=RebornWD196::Control(b,enemy,scene,swiftForced,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,true,false,d.reason};
  if(auto d=RebornWD193::Swift(b,s,scene,swiftForced,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
