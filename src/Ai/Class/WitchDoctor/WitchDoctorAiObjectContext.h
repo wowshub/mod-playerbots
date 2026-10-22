@@ -241,11 +241,15 @@ class TickAction:public MovementAction
 public:
  explicit TickAction(PlayerbotAI* a):MovementAction(a,"wd169 tick"),ai(a){}
  bool isUseful()override
- {if(PartyCombat(ai))quietSince=0;return Choose(ai).spell!=0||MaintenanceDue();}
+ {
+  // WD199: unavailable is not an empty, valid build. Do not schedule maintenance.
+  if(!WD168::ReadPlan(ai->GetBot()).available){quietSince=0;return false;}
+  if(PartyCombat(ai))quietSince=0;return Choose(ai).spell!=0||MaintenanceDue();
+ }
  bool Execute(Event)override
  {
   if(!SafeActor())return false;
-  auto snapshot=WD168::Capture(ai->GetBot());if(!snapshot.plan.available)return false;
+  auto snapshot=WD168::Capture(ai->GetBot());if(!snapshot.plan.available){quietSince=0;return false;}
   uint32 now=getMSTime();auto* b=ai->GetBot();
   // WD198: select recovery before optional equipment/recall maintenance.
   auto next=Choose(ai);
