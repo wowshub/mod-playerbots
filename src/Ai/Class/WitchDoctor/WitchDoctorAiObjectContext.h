@@ -10,6 +10,7 @@
 #include "WitchDoctorVoodoo175.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
+#include "WitchDoctorHeal180.h"
 #include "Timer.h"
 #include "Log.h"
 #include "PlayerbotAI.h"
@@ -91,13 +92,13 @@ inline Choice Choose(PlayerbotAI* ai)
  if(!s.plan.available||!s.alive||!s.inWorld||b->IsBeingTeleported()||(b->IsNonMeleeSpellCast(false,false,true)||b->HasUnitState(UNIT_STATE_LOST_CONTROL))||!b->GetCharmerGUID().IsEmpty())return {};
  bool partyCombat=PartyCombat(ai);
  auto scene=RebornWD171::Observe(b,partyCombat,[&](Unit* u){return Engaged(b,u,ai->GetMaster());});
- bool healer=s.plan.spec==1,healingNeeded=false;Choice heal;float health=healer?85.f:40.f;
- auto consider=[&](Unit* u){if(MemberTarget(b,u)&&u->GetHealthPct()<health){healingNeeded=true;if(auto c=Offer(ai,s.spells[1].learned,u,false);c.spell){health=u->GetHealthPct();heal=c;}}};
- consider(b);
- if(healer)if(auto* group=b->GetGroup())for(auto* ref=group->GetFirstMember();ref;ref=ref->next())consider(ref->GetSource());
- if(healer)for(Unit* u:scene.members)if(u->GetTypeId()!=TYPEID_PLAYER)consider(u);
- // WD178: emergency healing first; a real removable debuff may outrank routine topping-up.
- if(heal.spell&&(health<35.f||(!healer&&health<40.f)))return heal;
+ bool healer=s.plan.spec==1;
+ auto triage=RebornWD180::Choose(b,scene,healer,s.spells[1].learned,
+  [&](Unit* u){return MemberTarget(b,u)&&(u==b||(u->GetTypeId()==TYPEID_PLAYER&&b->GetGroup()&&b->IsInRaidWith(u))||RebornWD171::Member(b,u));},
+  [&](uint32 id,Unit* u){return Offer(ai,id,u,false);},[&](uint32 id,Unit* u){return CanUse(ai,id,u);});
+ bool healingNeeded=triage.needed;auto heal=triage.choice;
+ // Urgent healing precedes cures; routine healing retains the prior cure priority.
+ if(heal.spell&&triage.urgent)return heal;
  if(auto d=RebornWD178::Choose(ai,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,false,false,d.reason};
  if(heal.spell)return heal;
@@ -111,6 +112,8 @@ inline Choice Choose(PlayerbotAI* ai)
  // Keep triage/cures first and do not start a long cast beside a critical ally.
  if(!partyCombat&&!scene.enemies&&!scene.critical&&b->GetHealthPct()>=60.f&&Prepared(ai,s.spells[4].learned))
   if(auto c=RebornWD179::Choose(ai,s,[&](uint32 id,Unit* u){return Offer(ai,id,u,false);});c.spell)return c;
+ if(auto prep=RebornWD180::Preparation(b,healer,partyCombat,healingNeeded,[&](uint32 id,Unit* u){return CanUse(ai,id,u);}))
+  return {prep,b,false,false,"prepare_healing_ingredient"};
  if(!partyCombat)
   if(auto d=RebornWD171::Buff(b,scene,s.plan.spec,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
    return {d.spell,d.target,false,false,d.reason};
@@ -213,7 +216,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD179 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD180 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
