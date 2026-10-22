@@ -14,6 +14,7 @@
 #include "WitchDoctorIdol193.h"
 #include "WitchDoctorControl196.h"
 #include "WitchDoctorInterrupt197.h"
+#include "WitchDoctorFool200.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -211,6 +212,8 @@ inline Choice Choose(PlayerbotAI* ai)
    return {summon.spell,enemy,true,true,"ward_coverage_move"};
   return {summon.spell,summon.target,false,false,summon.reason};
  }
+ if(auto d=RebornWD200::Fool(b,enemy,s,scene,movementLocked,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,true,false,d.reason};
  if(s.plan.spec==2)
  {
   // Eclipse snapshots Spirits, it does not consume them. Only the native completed cast grants Price.
