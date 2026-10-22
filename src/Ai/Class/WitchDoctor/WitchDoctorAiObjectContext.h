@@ -9,6 +9,7 @@
 #include "WitchDoctorTeam171.h"
 #include "WitchDoctorVoodoo175.h"
 #include "WitchDoctorCure178.h"
+#include "WitchDoctorResurrect179.h"
 #include "Timer.h"
 #include "Log.h"
 #include "PlayerbotAI.h"
@@ -106,6 +107,10 @@ inline Choice Choose(PlayerbotAI* ai)
   if(!s.summons[1].present&&scene.uncoveredMana&&CanUse(ai,9003370,b))return {9003370,b,false,false,"healer_blocked_low_mana"};
   return {};
  }
+ // WD179: safe post-combat player resurrection before routine Wuju refresh.
+ // Keep triage/cures first and do not start a long cast beside a critical ally.
+ if(!partyCombat&&!scene.enemies&&!scene.critical&&b->GetHealthPct()>=60.f&&Prepared(ai,s.spells[4].learned))
+  if(auto c=RebornWD179::Choose(ai,s,[&](uint32 id,Unit* u){return Offer(ai,id,u,false);});c.spell)return c;
  if(!partyCombat)
   if(auto d=RebornWD171::Buff(b,scene,s.plan.spec,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
    return {d.spell,d.target,false,false,d.reason};
@@ -208,7 +213,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD178 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD179 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
