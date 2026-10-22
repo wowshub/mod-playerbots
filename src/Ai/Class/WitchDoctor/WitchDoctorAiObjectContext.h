@@ -80,7 +80,7 @@ inline float WardCoverageRange()
  // Ward AI scans 30 yards. Reserve 5 for the 2.5-yard mass ring and target motion.
  float range=std::min(30.f,bolt->GetMaxRange(false));return range>5.f ? range-5.f : 0.f;
 }
-inline bool AttackWard(uint32 spell){return spell==9003160||spell==9004080;}
+inline bool AttackWard(uint32 spell){return spell==9003160||spell==9004080||spell==9004182;}
 struct Choice{uint32 spell=0;Unit* target=nullptr;bool damage=false;bool reposition=false;char const* reason="rotation";};
 inline Choice Offer(PlayerbotAI* ai,uint32 spell,Unit* target,bool damage)
 {

@@ -211,8 +211,20 @@ template<class Can>inline Decision Summon(Player* b,WD168::Snapshot const& s,Sce
   if(t.uncoveredMana)if(auto d=choose(9003370,"uncovered_low_mana");d.spell)return d;
   if(t.dispelNeeded)if(auto d=choose(9003440,"group_dispel_needed");d.spell)return d;
  }
- if(s.plan.spec!=1&&t.enemies>=3&&s.massWards==0&&!b->HasAura(9004080,b->GetGUID())&&s.maxMana&&s.mana*100ull>=s.maxMana*45ull)
-  if(auto d=choose(9004080,"three_engaged_enemies");d.spell)return d;
+ // WD201: native unit casts do not resolve the player's temporary button replacement.
+ // Respect the actual mapping; never fall back to the replaced six-serpent spell.
+ if(s.plan.spec!=1&&s.maxMana&&s.mana*100ull>=s.maxMana*45ull)
+ {
+  auto call=WD168::ReadSpell(b,9004080);
+  if(call.replacement==9004182)
+  {
+   if(call.learned==9004080&&t.enemies&& !s.viperPresent&&
+      b->HasSpell(9004180)&&b->HasAura(9004180,b->GetGUID()))
+    if(auto d=choose(9004182,"viper_replacement_missing");d.spell)return d;
+  }
+  else if(!call.replacement&&t.enemies>=3&&s.massWards==0&&!b->HasAura(9004080,b->GetGUID()))
+   if(auto d=choose(9004080,"three_engaged_enemies");d.spell)return d;
+ }
  if(!s.summons[0].present)if(auto d=choose(9003160,"single_attack_ward_missing");d.spell)return d;
  if(!s.summons[1].present&&s.summons[1].selected&&s.summons[1].selected!=9003370&&s.summons[1].selected!=9003953&&s.summons[1].selected!=9003440&&s.summons[1].selected!=9003432)
   if(auto d=choose(s.summons[1].selected,"selected_support_idol");d.spell)return d;
