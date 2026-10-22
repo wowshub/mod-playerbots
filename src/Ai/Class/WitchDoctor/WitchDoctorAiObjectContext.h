@@ -11,6 +11,7 @@
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
+#include "WitchDoctorBeam182.h"
 #include "Timer.h"
 #include "Log.h"
 #include "PlayerbotAI.h"
@@ -101,6 +102,11 @@ inline Choice Choose(PlayerbotAI* ai)
  if(heal.spell&&triage.urgent)return heal;
  if(auto d=RebornWD178::Choose(ai,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,false,false,d.reason};
+ // WD182: emergency/instant healing and actual cures stay ahead of a new channel.
+ if(healer&&(!heal.spell||heal.spell==s.spells[1].learned||std::string_view(heal.reason)=="single_spirit_bottle"))
+  if(auto c=RebornWD182::Choose(b,s,scene,partyCombat,
+   [&](Unit* u){return MemberTarget(b,u)&&(u==b||(u->GetTypeId()==TYPEID_PLAYER&&b->GetGroup()&&b->IsInRaidWith(u))||RebornWD171::Member(b,u));},
+   [&](uint32 id,Unit* u){return Offer(ai,id,u,false);},[&](uint32 id,Unit* u){return CanUse(ai,id,u);});c.spell)return c;
  if(heal.spell)return heal;
  if(healer&&healingNeeded)
  {
@@ -216,7 +222,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD181 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD182 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
