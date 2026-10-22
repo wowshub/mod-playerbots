@@ -222,7 +222,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD182 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD184 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }

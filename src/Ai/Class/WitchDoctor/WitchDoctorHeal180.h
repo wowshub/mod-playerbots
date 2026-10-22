@@ -46,10 +46,12 @@ inline auto Choose(Player* b,Scene const& scene,bool healer,uint32 brew,Gate eli
  if(!out.needed)return out;
  uint32 toss=Learned(b,9003870,9003876),splash=Learned(b,9003890,9003896);
  uint32 bottle=Learned(b,9003460,9003467);
- // WD181: Tiki Base blocks the normal Bottle in the real SpellScript.
- // Do not claim the separate Tiki Splash action has been implemented here.
- if(b->HasSpell(9003958)&&b->HasAura(9003958,b->GetGUID())&&
-    (b->HasAura(9003942)||b->HasAura(9003944)))bottle=0;
+ // WD184: preserve the native base-dependent Bottle replacement. The active
+ // action must be learned separately; the passive alone never grants a cast.
+ bool tikiBase=b->HasSpell(9003958)&&b->HasAura(9003958,b->GetGUID())&&
+    (b->HasAura(9003942)||b->HasAura(9003944));
+ uint32 tiki=tikiBase?Learned(b,9003959,9003959):0;
+ if(tikiBase)bottle=0;
  bool ingredient=Ingredient(b);
  // Emergency: a direct instant heal on the lowest reachable member wins first.
  if(ingredient&&toss&&out.urgent)
@@ -74,11 +76,29 @@ inline auto Choose(Player* b,Scene const& scene,bool healer,uint32 brew,Gate eli
   }
   if(center){out.choice=offer(splash,center);out.choice.reason="cluster_splash_potion";return out;}
  }
+ // Tiki is a persistent ground HoT, not an instant Bottle heal or an emergency
+ // substitute. Cover at least two wounded members without our existing Tiki.
+ Choice tikiChoice{};
+ if(healer&&!out.urgent&&tiki)
+ {
+  auto* info=sSpellMgr->GetSpellInfo(tiki);float radius=info->Effects[0].CalcRadius(b);
+  Unit* center=nullptr;uint32 best=1;float deficit=0.f;
+  if(radius>0.f)for(Unit* c:members)if(c->GetHealthPct()<75.f&&!c->HasAura(tiki,b->GetGUID())&&can(tiki,c))
+  {
+   uint32 count=0;float missing=0.f;
+   for(Unit* u:members)if(u->GetHealthPct()<75.f&&!u->HasAura(tiki,b->GetGUID())&&
+      c->IsWithinDistInMap(u,radius)&&c->IsWithinLOSInMap(u))
+      {++count;missing+=75.f-u->GetHealthPct();}
+   if(count>best||(count==best&&count>=2&&missing>deficit)){best=count;deficit=missing;center=c;}
+  }
+  if(center){tikiChoice=offer(tiki,center);tikiChoice.reason="cluster_tiki_splash";}
+ }
  // Save limited instant cooldowns for meaningful deficits; ordinary Brew tops up.
  for(Unit* u:members)if(u->GetHealthPct()<threshold)
  {
   if(ingredient&&toss&&u->GetHealthPct()<70.f&&can(toss,u))
    {out.choice=offer(toss,u);out.choice.reason="single_potion_toss";return out;}
+  if(tikiChoice.spell){out.choice=tikiChoice;return out;}
   if(bottle&&u->GetHealthPct()<70.f&&can(bottle,u))
    {out.choice=offer(bottle,u);out.choice.reason="single_spirit_bottle";return out;}
   if(auto c=offer(brew,u);c.spell){out.choice=c;return out;}
