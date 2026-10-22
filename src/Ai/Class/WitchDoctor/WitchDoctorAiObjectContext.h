@@ -18,6 +18,7 @@
 #include "SpellMgr.h"
 #include "CharmInfo.h"
 #include <memory>
+#include <string_view>
 #include "../../../../../mod-reborn-witchdoctor/src/RebornWitchDoctorBotState168.h"
 namespace RebornWD169
 {
@@ -119,16 +120,22 @@ inline Choice Choose(PlayerbotAI* ai)
  // Do not spend an expiring Price window on summon maintenance; emergency heals still win.
  bool priceReady=b->HasAura(9004175,b->GetGUID());
  if(s.plan.spec==2&&priceReady)if(auto c=Offer(ai,s.spells[8].learned,enemy,true);c.spell){c.reason="price_glaive";return c;}
- if(auto d=RebornWD171::Summon(b,s,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
-  return {d.spell,d.target,false,false,d.reason};
+ // WD177: learned class utilities are shared. Spec selects the main damage/heal chain,
+ // not a whitelist of spellbook columns. Urgent party recovery still outranks debuffs.
+ auto summon=RebornWD171::Summon(b,s,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});
+ std::string_view why=summon.reason;
+ if(summon.spell&&(why=="uncovered_group_healing"||why=="group_health_imbalance"||
+                  why=="uncovered_low_mana"||why=="group_dispel_needed"))
+  return {summon.spell,summon.target,false,false,summon.reason};
+ // Brewing keeps a reserve and only reaches this point when no ally needs its heal.
+ if(!healer||(s.maxMana&&s.mana*100ull>=s.maxMana*60ull))
+  if(auto c=RebornWD175::Maintain(b,enemy,[&](uint32 id,Unit* u){return Offer(ai,id,u,true);});c.spell)return c;
+ // Routine summons no longer starve missing Hex/Jinx; existing slot/cooldown safety stays native.
+ if(summon.spell)return {summon.spell,summon.target,false,false,summon.reason};
  if(s.plan.spec==0)
   if(auto c=RebornWD175::Choose(b,enemy,[&](uint32 id,Unit* u){return Offer(ai,id,u,true);});c.spell)return c;
  if(s.plan.spec==2)
  {
-  // Do not refresh our own still-active Hex every tick; another doctor's aura is not ours.
-  bool ownHex=false;for(uint32 id:{9003104u,9003106u,9003107u,9003108u,9003109u,9003110u,9003111u,9003112u})
-   if(enemy->HasAura(id,b->GetGUID())){ownHex=true;break;}
-  if(!ownHex&&s.spells[2].replacement==0)if(auto c=Offer(ai,s.spells[2].learned,enemy,true);c.spell)return c;
   // Eclipse snapshots Spirits, it does not consume them. Only the native completed cast grants Price.
   // Keep an existing window; missing talent/Glaive must not block the learned Eclipse itself.
   if(s.souls==5&&!priceReady)if(auto c=Offer(ai,s.spells[7].learned,enemy,true);c.spell){c.reason="five_spirit_eclipse";return c;}
@@ -196,7 +203,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD176 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD177 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
