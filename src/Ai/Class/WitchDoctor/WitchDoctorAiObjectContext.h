@@ -15,6 +15,7 @@
 #include "WitchDoctorControl196.h"
 #include "WitchDoctorInterrupt197.h"
 #include "WitchDoctorFool200.h"
+#include "WitchDoctorGlaive204.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -51,6 +52,9 @@ inline bool Engaged(Player* b,Unit* u,Player* master)
   if(auto* ally=ref->GetSource())if(ally->IsAlive()&&b->IsInMap(ally)&&b->InSamePhase(ally)&&ally->IsInCombatWith(u))return true;
  return false;
 }
+// WD204B: Glaive is a caster-centred cone; RangeEntry=0 is not its damage radius.
+inline float DecisionRange(Player* b,uint32 id,SpellInfo const* info)
+{return RebornWD204::GlaiveFamily(id)?RebornWD204::GlaiveRange(b,id):info->GetMaxRange(info->IsPositive(),b);}
 // Playerbots' native CanCastSpell intentionally probes with power cost ignored.
 // As in the upstream CoA power gate, check actual resources separately.
 inline bool CanUse(PlayerbotAI* ai,uint32 spell,Unit* target)
@@ -59,10 +63,11 @@ inline bool CanUse(PlayerbotAI* ai,uint32 spell,Unit* target)
  auto* info=sSpellMgr->GetSpellInfo(spell);if(!info||b->HasSpellCooldown(spell)||b->GetGlobalCooldownMgr().HasGlobalCooldown(info))return false;
  if(info->PowerType<MAX_POWERS)
  {int32 cost=info->CalcPowerCost(b,info->GetSchoolMask());if(cost>0&&int32(b->GetPower(Powers(info->PowerType)))<cost)return false;}
+ if(RebornWD204::GlaiveFamily(spell)&&(b==target||RebornWD204::GlaiveRange(b,spell)<=0.f||target->IsImmunedToSpell(info)))return false;
  if(b!=target)
- {float max=info->GetMaxRange(info->IsPositive(),b);if(max<=0||!b->IsWithinCombatRange(target,max)||!b->IsWithinLOSInMap(target))return false;
+ {float max=DecisionRange(b,spell,info);if(max<=0||!b->IsWithinCombatRange(target,max)||!b->IsWithinLOSInMap(target))return false;
   float min=info->GetMinRange(info->IsPositive());if(min>0&&b->IsWithinCombatRange(target,min))return false;}
- return ai->CanCastSpell(spell,target,true);
+ return ai->CanCastSpell(spell,RebornWD204::GlaiveFamily(spell)?b:target,true);
 }
 // Readiness without the movement/range rejection. The native spell engine remains the final authority.
 inline bool Prepared(PlayerbotAI* ai,uint32 spell)
@@ -85,9 +90,10 @@ struct Choice{uint32 spell=0;Unit* target=nullptr;bool damage=false;bool reposit
 inline Choice Offer(PlayerbotAI* ai,uint32 spell,Unit* target,bool damage)
 {
  if(!target||!Prepared(ai,spell))return {};
+ if(RebornWD204::GlaiveFamily(spell)&&RebornWD204::GlaiveRange(ai->GetBot(),spell)<=0.f)return {};
  if(CanUse(ai,spell,target))return {spell,target,damage,false};
  auto* b=ai->GetBot();auto* info=sSpellMgr->GetSpellInfo(spell);
- bool geometry=b!=target&&(!b->IsWithinLOSInMap(target)||!b->IsWithinCombatRange(target,info->GetMaxRange(info->IsPositive(),b))||
+ bool geometry=b!=target&&(!b->IsWithinLOSInMap(target)||!b->IsWithinCombatRange(target,DecisionRange(b,spell,info))||
   (info->GetMinRange(info->IsPositive())>0&&b->IsWithinCombatRange(target,info->GetMinRange(info->IsPositive()))));
  if(geometry||(b->isMoving()&&info->CalcCastTime(b)>0))return {spell,target,damage,true};
  return {};
@@ -295,7 +301,7 @@ public:
    }
    if(b!=next.target&&!b->IsWithinLOSInMap(next.target))
    {if(ai->HasStrategy("stay",BOT_STATE_COMBAT)||!b->IsWithinDistInMap(next.target,55.f))return false;return MoveToLOS(next.target,true);}
-   float max=info->GetMaxRange(info->IsPositive(),b),min=info->GetMinRange(info->IsPositive());
+   float max=DecisionRange(b,next.spell,info),min=info->GetMinRange(info->IsPositive());
    if(b!=next.target&&(!b->IsWithinCombatRange(next.target,max)||(min>0&&b->IsWithinCombatRange(next.target,min))))
    {
     if(ai->HasStrategy("stay",BOT_STATE_COMBAT)||!b->IsWithinDistInMap(next.target,55.f))return false;
@@ -310,6 +316,13 @@ public:
   if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD193 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   WD196::TargetScope controlTarget(b,next.spell==9003861?next.target:nullptr,next.spell==9003861?CurrentEnemy(ai):nullptr);
+  if(RebornWD204::GlaiveFamily(next.spell))
+  {
+   if(auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement"))
+   {auto const& m=value->Get();if(m.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(m.msTime,now)<m.lastdelayTime)return false;}
+   b->SetFacingToObject(next.target);
+   return ai->CastSpell(next.spell,b); // Native cone targets/fees remain authoritative.
+  }
   return ai->CastSpell(next.spell,next.target);
  }
 };
