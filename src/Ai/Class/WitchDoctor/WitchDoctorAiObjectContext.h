@@ -10,6 +10,7 @@
 #include "WitchDoctorVoodoo175.h"
 #include "WitchDoctorVoodoo189.h"
 #include "WitchDoctorCooldown190.h"
+#include "WitchDoctorVeil192.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -182,6 +183,8 @@ inline Choice Choose(PlayerbotAI* ai)
  {auto const& m=value->Get();movementLocked=m.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(m.msTime,getMSTime())<m.lastdelayTime;}
  if(auto d=RebornWD190::Burst(b,enemy,s,scene,movementLocked,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,false,false,d.reason};
+ if(auto d=RebornWD192::Veil(b,enemy,s,movementLocked,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,true,false,d.reason};
  // Ready damage and passive cleave must not wait behind routine slot maintenance.
  if(s.plan.spec==0)
  {
@@ -273,7 +276,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD191 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD192 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
