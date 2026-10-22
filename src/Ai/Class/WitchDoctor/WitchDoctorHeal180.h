@@ -45,11 +45,19 @@ inline auto Choose(Player* b,Scene const& scene,bool healer,uint32 brew,Gate eli
  out.urgent=out.needed&&out.lowest<(healer?35.f:40.f);
  if(!out.needed)return out;
  uint32 toss=Learned(b,9003870,9003876),splash=Learned(b,9003890,9003896);
+ uint32 bottle=Learned(b,9003460,9003467);
+ // WD181: Tiki Base blocks the normal Bottle in the real SpellScript.
+ // Do not claim the separate Tiki Splash action has been implemented here.
+ if(b->HasSpell(9003958)&&b->HasAura(9003958,b->GetGUID())&&
+    (b->HasAura(9003942)||b->HasAura(9003944)))bottle=0;
  bool ingredient=Ingredient(b);
  // Emergency: a direct instant heal on the lowest reachable member wins first.
  if(ingredient&&toss&&out.urgent)
   for(Unit* u:members)if(u->GetHealthPct()<(healer?35.f:40.f)&&can(toss,u))
    {out.choice=offer(toss,u);out.choice.reason="emergency_potion_toss";return out;}
+ if(bottle&&out.urgent)
+  for(Unit* u:members)if(u->GetHealthPct()<(healer?35.f:40.f)&&can(bottle,u))
+   {out.choice=offer(bottle,u);out.choice.reason="emergency_spirit_bottle";return out;}
  // Splash is a destination heal. Count recipients around the actual destination,
  // using the native radius (including spell mods), not distance from the caster.
  if(ingredient&&healer&&splash)
@@ -71,6 +79,8 @@ inline auto Choose(Player* b,Scene const& scene,bool healer,uint32 brew,Gate eli
  {
   if(ingredient&&toss&&u->GetHealthPct()<70.f&&can(toss,u))
    {out.choice=offer(toss,u);out.choice.reason="single_potion_toss";return out;}
+  if(bottle&&u->GetHealthPct()<70.f&&can(bottle,u))
+   {out.choice=offer(bottle,u);out.choice.reason="single_spirit_bottle";return out;}
   if(auto c=offer(brew,u);c.spell){out.choice=c;return out;}
  }
  return out;
