@@ -9,6 +9,7 @@
 #include "WitchDoctorTeam171.h"
 #include "WitchDoctorVoodoo175.h"
 #include "WitchDoctorVoodoo189.h"
+#include "WitchDoctorCooldown190.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -103,6 +104,8 @@ inline Choice Choose(PlayerbotAI* ai)
  bool partyCombat=PartyCombat(ai);
  auto scene=RebornWD171::Observe(b,partyCombat,[&](Unit* u){return Engaged(b,u,ai->GetMaster());});
  bool healer=s.plan.spec==1;
+ if(auto d=RebornWD190::Survival(b,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,false,false,d.reason};
  auto triage=RebornWD180::Choose(b,scene,healer,s.spells[1].learned,
   [&](Unit* u){return MemberTarget(b,u)&&(u==b||(u->GetTypeId()==TYPEID_PLAYER&&b->GetGroup()&&b->IsInRaidWith(u))||RebornWD171::Member(b,u));},
   [&](uint32 id,Unit* u){return Offer(ai,id,u,false);},[&](uint32 id,Unit* u){return CanUse(ai,id,u);});
@@ -160,6 +163,11 @@ inline Choice Choose(PlayerbotAI* ai)
  // Brewing keeps a reserve and only reaches this point when no ally needs its heal.
  if(!healer||(s.maxMana&&s.mana*100ull>=s.maxMana*60ull))
   if(auto c=RebornWD175::Maintain(b,enemy,[&](uint32 id,Unit* u){return Offer(ai,id,u,true);});c.spell)return c;
+ bool movementLocked=false;
+ if(auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement"))
+ {auto const& m=value->Get();movementLocked=m.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(m.msTime,getMSTime())<m.lastdelayTime;}
+ if(auto d=RebornWD190::Burst(b,enemy,s,scene,movementLocked,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,false,false,d.reason};
  // Ready damage and passive cleave must not wait behind routine slot maintenance.
  if(s.plan.spec==0)
  {
@@ -250,7 +258,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD189 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD190 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
