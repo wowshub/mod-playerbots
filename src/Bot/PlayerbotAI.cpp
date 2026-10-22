@@ -3533,7 +3533,8 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
         return false;
     }
 
-    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr)
+    // WD191: only the native side whitelist on our own live automatic beam.
+    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr && !WD168::BeamSideReady(bot, spellid))
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasRealPlayerMaster()))
         {

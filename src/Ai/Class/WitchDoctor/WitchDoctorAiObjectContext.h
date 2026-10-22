@@ -97,9 +97,23 @@ inline bool PartyCombat(PlayerbotAI* ai)
 }
 inline bool Occupied(WD168::Snapshot const& s)
 {for(auto const& slot:s.summons)if(slot.present)return true;return false;}
+inline Choice BeamSideChoice(PlayerbotAI* ai)
+{
+ auto* b=ai->GetBot();if(!WD168::BeamSideReady(b))return {};
+ if(auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement"))
+ {auto const& m=value->Get();if(m.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(m.msTime,getMSTime())<m.lastdelayTime)return {};}
+ auto scene=RebornWD171::Observe(b,PartyCombat(ai),[&](Unit* u){return Engaged(b,u,ai->GetMaster());});
+ auto can=[&](uint32 id,Unit* u){return WD168::BeamSideReady(b,id)&&CanUse(ai,id,u);};
+ auto triage=RebornWD180::Choose(b,scene,true,0,
+  [&](Unit* u){return MemberTarget(b,u)&&(u==b||(u->GetTypeId()==TYPEID_PLAYER&&b->GetGroup()&&b->IsInRaidWith(u))||RebornWD171::Member(b,u));},
+  [&](uint32 id,Unit* u)->Choice{return id&&can(id,u)?Choice{id,u,false,false,"beam_side_heal"}:Choice{};},can);
+ return triage.choice; // No preparation, summons, cures or repositioning during a channel.
+}
 inline Choice Choose(PlayerbotAI* ai)
 {
- Player* b=ai->GetBot();auto s=WD168::Capture(b);
+ Player* b=ai->GetBot();
+ if(b->GetCurrentSpell(CURRENT_CHANNELED_SPELL))return BeamSideChoice(ai);
+ auto s=WD168::Capture(b);
  if(!s.plan.available||!s.alive||!s.inWorld||b->IsBeingTeleported()||(b->IsNonMeleeSpellCast(false,false,true)||b->HasUnitState(UNIT_STATE_LOST_CONTROL))||!b->GetCharmerGUID().IsEmpty())return {};
  bool partyCombat=PartyCombat(ai);
  auto scene=RebornWD171::Observe(b,partyCombat,[&](Unit* u){return Engaged(b,u,ai->GetMaster());});
@@ -201,9 +215,10 @@ class TickAction:public MovementAction
 {
  PlayerbotAI* ai;uint32 quietSince=0,lastMaintenance=0,lastLog=0;
  bool SafeActor()
- {auto* b=ai->GetBot();return b->IsAlive()&&b->IsInWorld()&&!b->IsBeingTeleported()&&!b->HasUnitState(UNIT_STATE_LOST_CONTROL)&&b->GetCharmerGUID().IsEmpty()&&!b->IsNonMeleeSpellCast(false,false,true);}
+ {auto* b=ai->GetBot();return b->IsAlive()&&b->IsInWorld()&&!b->IsBeingTeleported()&&!b->HasUnitState(UNIT_STATE_LOST_CONTROL)&&b->GetCharmerGUID().IsEmpty()&&(!b->IsNonMeleeSpellCast(false,false,true)||WD168::BeamSideReady(b));}
  bool MaintenanceDue()
  {
+  if(ai->GetBot()->GetCurrentSpell(CURRENT_CHANNELED_SPELL))return false;
   uint32 now=getMSTime();if(PartyCombat(ai)){quietSince=0;return false;}
   if(!quietSince)quietSince=now?now:1;
   return SafeActor()&&getMSTimeDiff(lastMaintenance,now)>=5000;
@@ -217,7 +232,7 @@ public:
   if(!SafeActor())return false;
   auto snapshot=WD168::Capture(ai->GetBot());if(!snapshot.plan.available)return false;
   uint32 now=getMSTime();auto* b=ai->GetBot();
-  if(PartyCombat(ai))quietSince=0;
+  if(PartyCombat(ai)||b->GetCurrentSpell(CURRENT_CHANNELED_SPELL))quietSince=0;
   else
   {
    if(!quietSince)quietSince=now?now:1;
@@ -258,7 +273,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD190 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD191 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
