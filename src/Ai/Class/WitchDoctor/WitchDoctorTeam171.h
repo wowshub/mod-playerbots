@@ -79,7 +79,7 @@ inline bool Restoration(uint32 spell,bool mana,uint32 depth=0)
 }
 struct Scene
 {
- std::vector<Unit*> members;
+ std::vector<Unit*> members,hostiles;
  uint32 injured=0,uncoveredHealing=0,critical=0,lowMana=0,uncoveredMana=0,enemies=0,castingEnemies=0,physical=0;
  uint32 linkLow=0,linkHigh=0,linkPlayers=0,dispelNeeded=0;
 };
@@ -103,7 +103,7 @@ template<class EnemyGate>inline Scene Observe(Player* b,bool combat,EnemyGate en
  for(auto* u:nearby)
  {
   if(Member(b,u)&&b->IsWithinDistInMap(u,radius)&&std::find(out.members.begin(),out.members.end(),u)==out.members.end())out.members.push_back(u);
-  if(u!=b&&b->IsWithinDistInMap(u,30.f)&&engaged(u)){++out.enemies;if(u->IsNonMeleeSpellCast(false,false,true))++out.castingEnemies;}
+  if(u!=b&&b->IsWithinDistInMap(u,30.f)&&engaged(u)){out.hostiles.push_back(u);++out.enemies;if(u->IsNonMeleeSpellCast(false,false,true))++out.castingEnemies;}
  }
  for(Unit* u:out.members)
  {

@@ -8,6 +8,7 @@
 #include "WitchDoctorEquipment170.h"
 #include "WitchDoctorTeam171.h"
 #include "WitchDoctorVoodoo175.h"
+#include "WitchDoctorVoodoo189.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -139,6 +140,8 @@ inline Choice Choose(PlayerbotAI* ai)
  if(!Engaged(b,enemy,master))enemy=b->GetVictim();
  if(!Engaged(b,enemy,master))for(auto* attacker:b->getAttackers())if(Engaged(b,attacker,master)){enemy=attacker;break;}
  if(!Engaged(b,enemy,master))return {};
+ if(auto d=RebornWD189::Defense(b,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,false,false,d.reason};
  // Get into casting range before spending three global cooldowns on immobile summons far from the fight.
  uint32 attack=b->HasSpell(9003968)?s.spells[5].learned:s.spells[0].learned;
  // WD176: keep the real proc replacement ID through native prepare and damage hooks.
@@ -157,6 +160,13 @@ inline Choice Choose(PlayerbotAI* ai)
  // Brewing keeps a reserve and only reaches this point when no ally needs its heal.
  if(!healer||(s.maxMana&&s.mana*100ull>=s.maxMana*60ull))
   if(auto c=RebornWD175::Maintain(b,enemy,[&](uint32 id,Unit* u){return Offer(ai,id,u,true);});c.spell)return c;
+ // Ready damage and passive cleave must not wait behind routine slot maintenance.
+ if(s.plan.spec==0)
+ {
+  if(auto c=RebornWD175::Choose(b,enemy,[&](uint32 id,Unit* u){return Offer(ai,id,u,true);});c.spell)return c;
+  if(auto c=RebornWD189::Damage(b,enemy,s,scene,
+   [&](uint32 id,Unit* u){return Offer(ai,id,u,u!=b);},[&](uint32 id,Unit* u){return CanUse(ai,id,u);});c.spell)return c;
+ }
  // Routine summons no longer starve missing Hex/Jinx; existing slot/cooldown safety stays native.
  if(summon.spell)
  {
@@ -164,8 +174,6 @@ inline Choice Choose(PlayerbotAI* ai)
    return {summon.spell,enemy,true,true,"ward_coverage_move"};
   return {summon.spell,summon.target,false,false,summon.reason};
  }
- if(s.plan.spec==0)
-  if(auto c=RebornWD175::Choose(b,enemy,[&](uint32 id,Unit* u){return Offer(ai,id,u,true);});c.spell)return c;
  if(s.plan.spec==2)
  {
   // Eclipse snapshots Spirits, it does not consume them. Only the native completed cast grants Price.
@@ -242,7 +250,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD188 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD189 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
