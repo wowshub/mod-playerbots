@@ -247,19 +247,25 @@ public:
   if(!SafeActor())return false;
   auto snapshot=WD168::Capture(ai->GetBot());if(!snapshot.plan.available)return false;
   uint32 now=getMSTime();auto* b=ai->GetBot();
+  // WD198: select recovery before optional equipment/recall maintenance.
+  auto next=Choose(ai);
   if(PartyCombat(ai)||b->GetCurrentSpell(CURRENT_CHANNELED_SPELL))quietSince=0;
   else
   {
    if(!quietSince)quietSince=now?now:1;
-   if(getMSTimeDiff(lastMaintenance,now)>=5000)
+   if(!next.spell&&getMSTimeDiff(lastMaintenance,now)>=5000)
    {
     lastMaintenance=now;
+    if(auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement"))
+    {auto const& movement=value->Get();if(movement.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(movement.msTime,now)<movement.lastdelayTime)return false;}
+    // A heal may be unavailable (mana/range/cooldown); keep existing recovery support.
+    auto recovery=RebornWD171::Observe(b,false,[&](Unit* u){return Engaged(b,u,ai->GetMaster());});
+    if(recovery.enemies||recovery.injured||recovery.lowMana||recovery.critical||recovery.dispelNeeded)return false;
     if(Occupied(snapshot)&&getMSTimeDiff(quietSince,now)>=6000&&CanUse(ai,snapshot.spells[9].learned,b))
      return ai->CastSpell(snapshot.spells[9].learned,b); // Original recall owns removal and paid-cost refund.
     if(RebornWD170::EquipOne(b,snapshot.plan.spec==2&&b->HasSpell(9003968)))return true;
    }
   }
-  auto next=Choose(ai);
   if(!next.spell||!next.target)return false;
   if(next.damage&&!Engaged(b,next.target,ai->GetMaster()))return false;
   if(next.reposition)
