@@ -8,6 +8,7 @@
 #include "WitchDoctorEquipment170.h"
 #include "WitchDoctorTeam171.h"
 #include "WitchDoctorVoodoo175.h"
+#include "WitchDoctorCure178.h"
 #include "Timer.h"
 #include "Log.h"
 #include "PlayerbotAI.h"
@@ -94,6 +95,10 @@ inline Choice Choose(PlayerbotAI* ai)
  consider(b);
  if(healer)if(auto* group=b->GetGroup())for(auto* ref=group->GetFirstMember();ref;ref=ref->next())consider(ref->GetSource());
  if(healer)for(Unit* u:scene.members)if(u->GetTypeId()!=TYPEID_PLAYER)consider(u);
+ // WD178: emergency healing first; a real removable debuff may outrank routine topping-up.
+ if(heal.spell&&(health<35.f||(!healer&&health<40.f)))return heal;
+ if(auto d=RebornWD178::Choose(ai,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,false,false,d.reason};
  if(heal.spell)return heal;
  if(healer&&healingNeeded)
  {
@@ -203,7 +208,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD177 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD178 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
