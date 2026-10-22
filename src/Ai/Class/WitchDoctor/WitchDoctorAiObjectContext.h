@@ -12,6 +12,7 @@
 #include "WitchDoctorCooldown190.h"
 #include "WitchDoctorVeil192.h"
 #include "WitchDoctorIdol193.h"
+#include "WitchDoctorControl196.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -164,6 +165,8 @@ inline Choice Choose(PlayerbotAI* ai)
  bool swiftForced=false;
  if(auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement"))
  {auto const& m=value->Get();swiftForced=m.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(m.msTime,getMSTime())<m.lastdelayTime;}
+ if(auto d=RebornWD196::Control(b,enemy,scene,swiftForced,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+  return {d.spell,d.target,true,false,d.reason};
  if(auto d=RebornWD193::Swift(b,s,scene,swiftForced,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,false,false,d.reason};
  // Get into casting range before spending three global cooldowns on immobile summons far from the fight.
