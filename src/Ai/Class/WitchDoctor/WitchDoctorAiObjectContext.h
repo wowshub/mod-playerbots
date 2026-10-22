@@ -66,6 +66,14 @@ inline bool Prepared(PlayerbotAI* ai,uint32 spell)
  {int32 cost=info->CalcPowerCost(b,info->GetSchoolMask());if(cost>0&&int32(b->GetPower(Powers(info->PowerType)))<cost)return false;}
  return true;
 }
+// WD188A: summon spell is self-targeted; its range does NOT describe ward coverage.
+inline float WardCoverageRange()
+{
+ auto* bolt=sSpellMgr->GetSpellInfo(9003161);if(!bolt)return 0.f;
+ // Ward AI scans 30 yards. Reserve 5 for the 2.5-yard mass ring and target motion.
+ float range=std::min(30.f,bolt->GetMaxRange(false));return range>5.f ? range-5.f : 0.f;
+}
+inline bool AttackWard(uint32 spell){return spell==9003160||spell==9004080;}
 struct Choice{uint32 spell=0;Unit* target=nullptr;bool damage=false;bool reposition=false;char const* reason="rotation";};
 inline Choice Offer(PlayerbotAI* ai,uint32 spell,Unit* target,bool damage)
 {
@@ -141,7 +149,7 @@ inline Choice Choose(PlayerbotAI* ai)
  if(s.plan.spec==2&&priceReady)if(auto c=Offer(ai,s.spells[8].learned,enemy,true);c.spell){c.reason="price_glaive";return c;}
  // WD177: learned class utilities are shared. Spec selects the main damage/heal chain,
  // not a whitelist of spellbook columns. Urgent party recovery still outranks debuffs.
- auto summon=RebornWD171::Summon(b,s,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});
+ auto summon=RebornWD171::Summon(b,s,scene,[&](uint32 id,Unit* u){return (!AttackWard(id)||WardCoverageRange()>0.f)&&CanUse(ai,id,u);});
  std::string_view why=summon.reason;
  if(summon.spell&&(why=="uncovered_group_healing"||why=="group_health_imbalance"||
                   why=="uncovered_low_mana"||why=="group_dispel_needed"))
@@ -150,7 +158,12 @@ inline Choice Choose(PlayerbotAI* ai)
  if(!healer||(s.maxMana&&s.mana*100ull>=s.maxMana*60ull))
   if(auto c=RebornWD175::Maintain(b,enemy,[&](uint32 id,Unit* u){return Offer(ai,id,u,true);});c.spell)return c;
  // Routine summons no longer starve missing Hex/Jinx; existing slot/cooldown safety stays native.
- if(summon.spell)return {summon.spell,summon.target,false,false,summon.reason};
+ if(summon.spell)
+ {
+  if(AttackWard(summon.spell)&&(!b->IsWithinDistInMap(enemy,WardCoverageRange())||!b->IsWithinLOSInMap(enemy)))
+   return {summon.spell,enemy,true,true,"ward_coverage_move"};
+  return {summon.spell,summon.target,false,false,summon.reason};
+ }
  if(s.plan.spec==0)
   if(auto c=RebornWD175::Choose(b,enemy,[&](uint32 id,Unit* u){return Offer(ai,id,u,true);});c.spell)return c;
  if(s.plan.spec==2)
@@ -208,6 +221,13 @@ public:
    auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement");
    if(value){auto const& last=value->Get();if(last.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(last.msTime,now)<last.lastdelayTime)return false;}
    auto* info=sSpellMgr->GetSpellInfo(next.spell);if(!info||!Prepared(ai,next.spell))return false;
+   if(std::string_view(next.reason)=="ward_coverage_move")
+   {
+    // Choose is recomputed each Execute. Never cast a self-summon on this enemy.
+    float range=WardCoverageRange();if(range<=0.f||ai->HasStrategy("stay",BOT_STATE_COMBAT)||!b->IsWithinDistInMap(next.target,55.f))return false;
+    if(!b->IsWithinLOSInMap(next.target))return MoveToLOS(next.target,true);
+    return ReachCombatTo(next.target,std::max(1.f,range-2.f));
+   }
    if(b!=next.target&&!b->IsWithinLOSInMap(next.target))
    {if(ai->HasStrategy("stay",BOT_STATE_COMBAT)||!b->IsWithinDistInMap(next.target,55.f))return false;return MoveToLOS(next.target,true);}
    float max=info->GetMaxRange(info->IsPositive(),b),min=info->GetMinRange(info->IsPositive());
@@ -222,7 +242,7 @@ public:
    return false;
   }
   if(!CanUse(ai,next.spell,next.target))return false;
-  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD185 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
+  if(getMSTimeDiff(lastLog,now)>=5000){lastLog=now;LOG_DEBUG("playerbots","WD188 {} spec={} spell={} souls={} reason={}",b->GetName(),snapshot.plan.spec,next.spell,snapshot.souls,next.reason);}
   WD168::AutomaticCastScope scope(b,next.spell);
   return ai->CastSpell(next.spell,next.target);
  }
