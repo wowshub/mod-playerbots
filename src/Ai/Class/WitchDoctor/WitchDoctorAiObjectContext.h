@@ -22,6 +22,7 @@
 #include "WitchDoctorBeam182.h"
 #include "Timer.h"
 #include "Log.h"
+#include "Config.h"
 #include "PlayerbotAI.h"
 #include "Player.h"
 #include "Group.h"
@@ -243,7 +244,30 @@ inline Choice Choose(PlayerbotAI* ai)
 }
 class TickAction:public MovementAction
 {
- PlayerbotAI* ai;uint32 quietSince=0,lastMaintenance=0,lastLog=0;
+ PlayerbotAI* ai;uint32 quietSince=0,lastMaintenance=0,lastLog=0,lastAoeLog=0;
+ // PBAOE1A: log unavailable choices too; no scheduling/casting changes.
+ void Diagnose(Choice const& next)
+ {
+  if(!sConfigMgr->GetOption<bool>("Reborn.PlayerbotAoeDiagnostic",false,false))return;
+  auto* b=ai->GetBot();if(!b->IsInWorld())return;
+  uint32 now=getMSTime();if(lastAoeLog&&getMSTimeDiff(lastAoeLog,now)<5000)return;lastAoeLog=now?now:1;
+  auto s=WD168::Capture(b);auto* enemy=CurrentEnemy(ai);
+  auto scene=RebornWD171::Observe(b,PartyCombat(ai),[&](Unit* u){return Engaged(b,u,ai->GetMaster());});
+  LOG_INFO("playerbots","[PBAOE1A wd] bot={} guid={} plan={} spec={} healer={} enemies={} souls={} mana={}/{} choice={} reason={} reposition={} target={} moving={} casting={}",
+   b->GetName(),b->GetGUID().ToString(),s.plan.available,s.plan.spec,s.plan.spec==1,scene.enemies,s.souls,s.mana,s.maxMana,
+   next.spell,next.reason,next.reposition,enemy?enemy->GetGUID().ToString():"none",b->isMoving(),b->IsNonMeleeSpellCast(false));
+  // Report concrete resource/geometry gates, not an inferred cause of all idle time.
+  auto flare=WD168::ReadSpell(b,9003560);
+  for(uint32 id:{flare.replacement?flare.replacement:flare.learned,s.spells[6].replacement?s.spells[6].replacement:s.spells[6].learned,s.spells[7].learned,s.spells[8].learned})
+  {
+   auto* info=sSpellMgr->GetSpellInfo(id);
+   int32 cost=info?info->CalcPowerCost(b,info->GetSchoolMask()):0;
+   LOG_INFO("playerbots","[PBAOE1A wd-spell] bot={} spell={} learned={} cooldown={} gcd={} cost={} powerType={} prepared={} rangeOK={} los={} darkTalent={} mimic={}",
+    b->GetName(),id,id&&b->HasSpell(id),id&&b->HasSpellCooldown(id),info&&b->GetGlobalCooldownMgr().HasGlobalCooldown(info),cost,
+    info?int32(info->PowerType):-1,Prepared(ai,id),enemy&&info&&b->IsWithinCombatRange(enemy,DecisionRange(b,id,info)),
+    enemy&&b->IsWithinLOSInMap(enemy),b->HasAura(9004092,b->GetGUID()),s.mimicPresent);
+  }
+ }
  bool SafeActor()
  {auto* b=ai->GetBot();return b->IsAlive()&&b->IsInWorld()&&!b->IsBeingTeleported()&&!b->HasUnitState(UNIT_STATE_LOST_CONTROL)&&b->GetCharmerGUID().IsEmpty()&&(!b->IsNonMeleeSpellCast(false,false,true)||WD168::BeamSideReady(b));}
  bool MaintenanceDue()
@@ -258,8 +282,8 @@ public:
  bool isUseful()override
  {
   // WD199: unavailable is not an empty, valid build. Do not schedule maintenance.
-  if(!WD168::ReadPlan(ai->GetBot()).available){quietSince=0;return false;}
-  if(PartyCombat(ai))quietSince=0;return Choose(ai).spell!=0||MaintenanceDue();
+  if(!WD168::ReadPlan(ai->GetBot()).available){quietSince=0;Diagnose({});return false;}
+  if(PartyCombat(ai))quietSince=0;auto next=Choose(ai);Diagnose(next);return next.spell!=0||MaintenanceDue();
  }
  bool Execute(Event)override
  {

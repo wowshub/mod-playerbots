@@ -93,6 +93,8 @@ public:
     bool testMode;
 
 private:
+    uint32 pbaoeLastSample = 0;
+    uint32 pbaoeTraceBudget = 0;
     bool MultiplyAndPush(std::vector<NextAction> actions, float forceRelevance, bool skipPrerequisites, Event event,
                          const char* pushType);
     void Reset();

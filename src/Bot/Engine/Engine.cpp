@@ -5,6 +5,9 @@
  */
 
 #include "Engine.h"
+#include "Config.h"
+#include <cstring>
+#include "Log.h"
 
 #include "Action.h"
 #include "Event.h"
@@ -143,6 +146,29 @@ void Engine::Init()
 
 bool Engine::DoNextAction(Unit* /*unit*/, uint32 /*depth*/, bool minimal)
 {
+    // PBAOE1A: sample one real decision tick, without invoking actions/triggers twice.
+    pbaoeTraceBudget = 0;
+    Player* sampleBot = botAI->GetBot();
+    uint32 sampleNow = getMSTime();
+    if ((sampleBot->getClass() == 8 || sampleBot->getClass() == 13) && sampleBot->IsInWorld() &&
+        sConfigMgr->GetOption<bool>("Reborn.PlayerbotAoeDiagnostic", false, false) &&
+        (!pbaoeLastSample || getMSTimeDiff(pbaoeLastSample, sampleNow) >= 5000))
+    {
+        pbaoeLastSample = sampleNow ? sampleNow : 1;
+        pbaoeTraceBudget = 16;
+        Unit* target = aiObjectContext->GetValue<Unit*>("current target")->Get();
+        uint32 nearby = 0;
+        auto attackers = aiObjectContext->GetValue<GuidVector>("attackers")->Get();
+        for (auto guid : attackers)
+            if (auto* u = botAI->GetUnit(guid))
+                if (target && u->IsAlive() && u->GetDistance(target->GetPosition()) <= 8.f) ++nearby;
+        LOG_INFO("playerbots", "[PBAOE1A engine] bot={} guid={} map={} instance={} combat={} alive={} mana={}/{} moving={} casting={} lostControl={} target={} distance={} los={} attackers={} cluster8={} minimal={} strategies={}",
+            sampleBot->GetName(), sampleBot->GetGUID().ToString(), sampleBot->GetMapId(), sampleBot->GetInstanceId(),
+            sampleBot->IsInCombat(), sampleBot->IsAlive(), sampleBot->GetPower(POWER_MANA), sampleBot->GetMaxPower(POWER_MANA),
+            sampleBot->isMoving(), sampleBot->IsNonMeleeSpellCast(false), sampleBot->HasUnitState(UNIT_STATE_LOST_CONTROL),
+            target ? target->GetGUID().ToString() : "none", target ? sampleBot->GetDistance(target) : -1.f,
+            target && sampleBot->IsWithinLOSInMap(target), attackers.size(), nearby, minimal, ListStrategies());
+    }
     LogAction("--- AI Tick ---");
 
     if (sPlayerbotAIConfig.logValuesPerTick)
@@ -250,6 +276,7 @@ bool Engine::DoNextAction(Unit* /*unit*/, uint32 /*depth*/, bool minimal)
         LogAction("no actions executed");
 
     queue.RemoveExpired();
+    pbaoeTraceBudget = 0;
 
     return actionExecuted;
 }
@@ -608,15 +635,20 @@ bool Engine::ListenAndExecute(Action* action, Event event)
 void Engine::LogAction(char const* format, ...)
 {
     Player* bot = botAI->GetBot();
-    if (sPlayerbotAIConfig.logInGroupOnly && (!bot->GetGroup() || !botAI->HasRealPlayerMaster()) && !testMode)
-        return;
-
     char buf[1024];
 
     va_list ap;
     va_start(ap, format);
     vsnprintf(buf, sizeof(buf), format, ap);
     va_end(ap);
+    if (pbaoeTraceBudget && (strncmp(buf, "A:", 2) == 0 || strncmp(buf, "Multiplier", 10) == 0 || strcmp(buf, "no actions executed") == 0))
+    {
+        --pbaoeTraceBudget;
+        LOG_INFO("playerbots", "[PBAOE1A action] bot={} guid={} {}", bot->GetName(), bot->GetGUID().ToString(), buf);
+    }
+    if (sPlayerbotAIConfig.logInGroupOnly && (!bot->GetGroup() || !botAI->HasRealPlayerMaster()) && !testMode)
+        return;
+
 
     lastAction += "|";
     lastAction += buf;
