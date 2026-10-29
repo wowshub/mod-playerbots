@@ -18,6 +18,7 @@
 #include "WitchDoctorGlaive204.h"
 #include "../../../../../mod-reborn-witchdoctor/src/RebornWitchDoctorBotControls3.h"
 #include "../../../../../mod-reborn-witchdoctor/src/RebornWitchDoctorBotAutoSummon4B.h"
+#include "../../../../../mod-reborn-witchdoctor/src/RebornWitchDoctorBotDecisionTrace4C.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -252,6 +253,7 @@ class TickAction:public MovementAction
  // PBAOE1A: log unavailable choices too; no scheduling/casting changes.
  void Diagnose(Choice const& next)
  {
+  WDWHY4::Record(ai->GetBot(),"useful",next.spell,next.reason,next.target,next.damage,next.reposition);
   if(!sConfigMgr->GetOption<bool>("Reborn.PlayerbotAoeDiagnostic",false,false))return;
   auto* b=ai->GetBot();if(!b->IsInWorld())return;
   uint32 now=getMSTime();if(lastAoeLog&&getMSTimeDiff(lastAoeLog,now)<5000)return;lastAoeLog=now?now:1;
@@ -291,11 +293,12 @@ public:
  }
  bool Execute(Event)override
  {
-  if(!SafeActor())return false;
-  auto snapshot=WD168::Capture(ai->GetBot());if(!snapshot.plan.available){quietSince=0;return false;}
+  if(!SafeActor()){WDWHY4::Record(ai->GetBot(),"execute_gate",0,"actor_unavailable",nullptr,false,false);return false;}
+  auto snapshot=WD168::Capture(ai->GetBot());if(!snapshot.plan.available){quietSince=0;WDWHY4::Record(ai->GetBot(),"execute_gate",0,"plan_unavailable",nullptr,false,false);return false;}
   uint32 now=getMSTime();auto* b=ai->GetBot();
   // WD198: select recovery before optional equipment/recall maintenance.
   auto next=Choose(ai);
+  WDWHY4::Record(b,"execute",next.spell,next.reason,next.target,next.damage,next.reposition);
   if(PartyCombat(ai)||b->GetCurrentSpell(CURRENT_CHANNELED_SPELL))quietSince=0;
   else
   {
@@ -309,7 +312,7 @@ public:
     auto recovery=RebornWD171::Observe(b,false,[&](Unit* u){return Engaged(b,u,ai->GetMaster());});
     if(recovery.enemies||recovery.injured||recovery.lowMana||recovery.critical||recovery.dispelNeeded)return false;
     if(Occupied(snapshot)&&getMSTimeDiff(quietSince,now)>=6000&&CanUse(ai,snapshot.spells[9].learned,b))
-     return ai->CastSpell(snapshot.spells[9].learned,b); // Original recall owns removal and paid-cost refund.
+     {bool cast=ai->CastSpell(snapshot.spells[9].learned,b);WDWHY4::Attempt(b,snapshot.spells[9].learned,cast);return cast;} // Native recall/refund unchanged.
     if(RebornWD170::EquipOne(b,snapshot.plan.spec==2&&b->HasSpell(9003968)))return true;
    }
   }
@@ -349,9 +352,11 @@ public:
    if(auto* value=ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement"))
    {auto const& m=value->Get();if(m.priority==MovementPriority::MOVEMENT_FORCED&&getMSTimeDiff(m.msTime,now)<m.lastdelayTime)return false;}
    b->SetFacingToObject(next.target);
-   return ai->CastSpell(next.spell,b); // Native cone targets/fees remain authoritative.
+   bool cast=ai->CastSpell(next.spell,b);WDWHY4::Attempt(b,next.spell,cast);return cast; // Native cone unchanged.
   }
-  return ai->CastSpell(next.spell,next.target);
+  bool cast=ai->CastSpell(next.spell,next.target);
+  WDWHY4::Attempt(b,next.spell,cast);
+  return cast;
  }
 };
 class SpecStrategy:public Strategy
