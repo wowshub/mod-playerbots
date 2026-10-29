@@ -16,6 +16,7 @@
 #include "WitchDoctorInterrupt197.h"
 #include "WitchDoctorFool200.h"
 #include "WitchDoctorGlaive204.h"
+#include "../../../../../mod-reborn-witchdoctor/src/RebornWitchDoctorBotControls3.h"
 #include "WitchDoctorCure178.h"
 #include "WitchDoctorResurrect179.h"
 #include "WitchDoctorHeal180.h"
@@ -61,6 +62,7 @@ inline float DecisionRange(Player* b,uint32 id,SpellInfo const* info)
 inline bool CanUse(PlayerbotAI* ai,uint32 spell,Unit* target)
 {
  auto* b=ai->GetBot();if(!spell||!target||!b->HasSpell(spell))return false;
+ if(!WDMB3::Allows(b,spell))return false;
  auto* info=sSpellMgr->GetSpellInfo(spell);if(!info||b->HasSpellCooldown(spell)||b->GetGlobalCooldownMgr().HasGlobalCooldown(info))return false;
  if(info->PowerType<MAX_POWERS)
  {int32 cost=info->CalcPowerCost(b,info->GetSchoolMask());if(cost>0&&int32(b->GetPower(Powers(info->PowerType)))<cost)return false;}
@@ -74,6 +76,7 @@ inline bool CanUse(PlayerbotAI* ai,uint32 spell,Unit* target)
 inline bool Prepared(PlayerbotAI* ai,uint32 spell)
 {
  auto* b=ai->GetBot();if(!spell||!b->HasSpell(spell))return false;
+ if(!WDMB3::Allows(b,spell))return false;
  auto* info=sSpellMgr->GetSpellInfo(spell);if(!info||b->HasSpellCooldown(spell)||b->GetGlobalCooldownMgr().HasGlobalCooldown(info))return false;
  if(info->PowerType<MAX_POWERS)
  {int32 cost=info->CalcPowerCost(b,info->GetSchoolMask());if(cost>0&&int32(b->GetPower(Powers(info->PowerType)))<cost)return false;}
@@ -150,7 +153,7 @@ inline Choice Choose(PlayerbotAI* ai)
  bool healingNeeded=triage.needed;auto heal=triage.choice;
  // Urgent healing precedes cures; routine healing retains the prior cure priority.
  if(heal.spell&&triage.urgent)return heal;
- if(auto d=RebornWD178::Choose(ai,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
+ if(WDMB3::Enabled(b,WDMB3::Cure))if(auto d=RebornWD178::Choose(ai,scene,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
   return {d.spell,d.target,false,false,d.reason};
  // WD182: emergency/instant healing and actual cures stay ahead of a new channel.
  if(healer&&(!heal.spell||heal.spell==s.spells[1].learned||std::string_view(heal.reason)=="single_spirit_bottle"))
@@ -170,7 +173,7 @@ inline Choice Choose(PlayerbotAI* ai)
   if(auto c=RebornWD179::Choose(ai,s,[&](uint32 id,Unit* u){return Offer(ai,id,u,false);});c.spell)return c;
  if(auto prep=RebornWD180::Preparation(b,healer,partyCombat,healingNeeded,[&](uint32 id,Unit* u){return CanUse(ai,id,u);}))
   return {prep,b,false,false,"prepare_healing_ingredient"};
- if(!partyCombat)
+ if(!partyCombat&&WDMB3::Enabled(b,WDMB3::Buff))
   if(auto d=RebornWD171::Buff(b,scene,s.plan.spec,[&](uint32 id,Unit* u){return CanUse(ai,id,u);});d.spell)
    return {d.spell,d.target,false,false,d.reason};
  Unit* enemy=CurrentEnemy(ai);Player* master=ai->GetMaster();
