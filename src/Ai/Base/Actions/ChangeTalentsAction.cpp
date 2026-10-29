@@ -46,6 +46,13 @@ bool ChangeTalentsAction::Execute(Event event)
             {
                 if (bot->GetSpecsCount() == 1 && bot->GetLevel() >= sWorld->getIntConfig(CONFIG_MIN_DUALSPEC_LEVEL))
                 {
+                    if (bot->getClass() <= 11 && bot->getClass() != 10)
+                    {
+                        botAI->TellMaster("请在天赋推荐界面选择币种并确认解锁第二天赋；旧切换命令不会免费解锁。 / Confirm a paid unlock in the talent recommendation panel first.");
+                        return false;
+                    }
+                    // Custom class native projections retain their existing policy;
+                    // their independent saved builds are not granted by these spells.
                     bot->CastSpell(bot, 63680, true, nullptr, nullptr, bot->GetGUID());
                     bot->CastSpell(bot, 63624, true, nullptr, nullptr, bot->GetGUID());
                 }
