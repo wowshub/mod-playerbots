@@ -29,6 +29,7 @@
 #include "KiteStrategy.h"
 #include "LfgStrategy.h"
 #include "LootNonCombatStrategy.h"
+#include "DCHinterlandStrategy.h"  // HLBG2A (DarkChaos)
 #include "MaintenanceStrategy.h"
 #include "MarkRtiStrategy.h"
 #include "MeleeCombatStrategy.h"
@@ -107,6 +108,7 @@ public:
         creators["arathi"] = &StrategyContext::arathi;
         creators["eye"] = &StrategyContext::eye;
         creators["isle"] = &StrategyContext::isle;
+        creators["dc hinterland"] = &StrategyContext::dc_hinterland;  // HLBG2A (DarkChaos)
         creators["arena"] = &StrategyContext::arena;
         creators["mount"] = &StrategyContext::mount;
         creators["rtsc"] = &StrategyContext::rtsc;
@@ -182,6 +184,7 @@ private:
     static Strategy* arathi(PlayerbotAI* botAI) { return new ArathiStrategy(botAI); }
     static Strategy* eye(PlayerbotAI* botAI) { return new EyeStrategy(botAI); }
     static Strategy* isle(PlayerbotAI* botAI) { return new IsleStrategy(botAI); }
+    static Strategy* dc_hinterland(PlayerbotAI* botAI) { return new DCHinterlandStrategy(botAI); }  // HLBG2A (DarkChaos)
     static Strategy* arena(PlayerbotAI* botAI) { return new ArenaStrategy(botAI); }
     static Strategy* rtsc(PlayerbotAI* botAI) { return new RTSCStrategy(botAI); }
     static Strategy* attack_tagged(PlayerbotAI* botAI) { return new AttackTaggedStrategy(botAI); }

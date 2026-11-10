@@ -9,6 +9,7 @@
 #include "ArenaTeam.h"
 #include "ArenaTeamMgr.h"
 #include "BattlegroundMgr.h"
+#include "DCHinterlandTactics.h"  // HLBG2A (DarkChaos)
 #include "Event.h"
 #include "GroupMgr.h"
 #include "PlayerbotAI.h"
@@ -713,6 +714,9 @@ bool BGStatusAction::LeaveBG(PlayerbotAI* botAI)
     botAI->ChangeStrategy("-Battleground", BOT_STATE_NON_COMBAT);
     botAI->ChangeStrategy("-arena", BOT_STATE_COMBAT);
     botAI->ChangeStrategy("-arena", BOT_STATE_NON_COMBAT);
+    // HLBG2A (DarkChaos): Hinterland BG roaming, see DCHinterlandTactics.h
+    botAI->ChangeStrategy("-dc hinterland", BOT_STATE_COMBAT);
+    botAI->ChangeStrategy("-dc hinterland", BOT_STATE_NON_COMBAT);
 
     LOG_INFO("playerbots", "Bot {} {}:{} <{}> leaves {}", bot->GetGUID().ToString().c_str(),
              bot->GetTeamId() == TEAM_ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(),
@@ -734,6 +738,10 @@ bool BGStatusAction::LeaveBG(PlayerbotAI* botAI)
     PositionInfo pos = botAI->GetAiObjectContext()->GetValue<PositionMap&>("position")->Get()["bg objective"];
     pos.Reset();
     posMap["bg objective"] = pos;
+    // HLBG2A (DarkChaos): HLBG keeps its roaming target in its own slot, see DCHinterlandTactics.h
+    PositionInfo hlbgPos = posMap[DC_HLBG_OBJECTIVE_KEY];
+    hlbgPos.Reset();
+    posMap[DC_HLBG_OBJECTIVE_KEY] = hlbgPos;
     return true;
 }
 
